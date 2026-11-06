@@ -1,0 +1,25 @@
+feature,area,priority,original,clone,notes
+Legal chess board,play,must,yes,yes,chess.js legality and special moves tested
+Bot opponents from beginner to strong engine,play,must,yes,yes,11 original characters plus custom preset; difficulty targets 250–2800
+Adjustable engine strength,play,must,yes,yes,Skill Level and time budget plus beginner mistakes; not Elo calibrated
+Color selection,play,must,yes,yes,White Black or random
+Live move classification,review,must,yes,yes,Independent high-strength analysis before and after each move
+Brilliant and Great detection,review,must,yes,yes,Original conservative heuristics; real Stockfish queen sacrifice regression
+Detailed move explanations,review,must,yes,yes,Quality plus tactical facts and principal variation
+Evaluation bar and chart,review,must,yes,yes,Real normalized engine evaluations
+Move history navigation,review,must,yes,yes,Board history does not mutate live game
+Hints and takebacks,coaching,must,yes,yes,Coach mode only
+Unassisted challenge mode,coaching,should,yes,yes,Review unlocks after game ends
+Interactive lessons,learning,must,yes,yes,Four original lessons; bounded starter curriculum
+Tactical puzzles,learning,must,yes,yes,Six original validated positions
+Saved games and resume,library,must,yes,yes,Browser-local up to 50 games
+PGN import and export,library,should,yes,yes,Full analysis on import; invalid notation handled
+Board themes and preferences,settings,should,yes,yes,Three palettes; sounds; coordinates; legal targets
+Responsive interface,design,should,yes,partial,Responsive CSS implemented; browser visual and touch QA unavailable
+Keyboard interactions,design,should,yes,yes,Labeled square buttons; history shortcuts; native modal dialogs
+Human-calibrated bot Elo,play,could,yes,partial,Parameters vary strength but tournament calibration is deferred
+Adaptive or celebrity bot models,play,could,yes,skip,Original characters; no impersonation or proprietary personality model
+Large licensed lesson catalog,learning,could,yes,skip,Original introductory content only
+Online opponents and friends,multiplayer,must,yes,skip,Explicitly excluded by user
+Accounts and cloud sync,backend,could,yes,skip,Future apps/api workspace documented
+Payments and subscriptions,billing,could,yes,skip,Outside requested learning and bot scope

@@ -138,8 +138,8 @@ describe('F04–F06 learning, settings and import', () => {
   it('changes a board preference and persists it', async () => {
     await setup();
     fireEvent.click(screen.getByRole('button', { name: 'Board settings' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Sage' }));
-    expect(preferences().theme).toBe('sage');
+    fireEvent.click(screen.getByRole('button', { name: 'Slate' }));
+    expect(preferences().theme).toBe('slate');
     fireEvent.click(screen.getByRole('checkbox', { name: /Board coordinates/ }));
     expect(preferences().coordinates).toBe(false);
   });
@@ -167,6 +167,20 @@ describe('F04–F06 learning, settings and import', () => {
   });
 });
 describe('board and persistence edge cases', () => {
+  it('updates the old board appearance while keeping saved games and assistance preferences', () => {
+    const storedGames = localStorage.getItem('openchess.v1.games');
+    write('preferences', { theme: 'walnut', sound: false, targets: false, coordinates: false });
+    expect(preferences()).toEqual({
+      appearanceVersion: 2,
+      theme: 'green',
+      sound: false,
+      targets: false,
+      coordinates: false,
+    });
+    expect(localStorage.getItem('openchess.v1.games')).toBe(storedGames);
+    write('preferences', { ...preferences(), theme: 'walnut' });
+    expect(preferences().theme).toBe('walnut');
+  });
   it('requires a promotion choice and supports underpromotion', () => {
     const onMove = vi.fn();
     render(

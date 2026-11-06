@@ -11,16 +11,18 @@ export type SavedGame = {
   mode: 'coach' | 'challenge';
 };
 export type Preferences = {
+  appearanceVersion: 2;
   sound: boolean;
   targets: boolean;
   coordinates: boolean;
-  theme: 'walnut' | 'sage' | 'violet';
+  theme: 'green' | 'walnut' | 'slate';
 };
 export const defaults: Preferences = {
+  appearanceVersion: 2,
   sound: true,
   targets: true,
   coordinates: true,
-  theme: 'walnut',
+  theme: 'green',
 };
 let cachedRaw: string | null = null;
 let cachedGames: SavedGame[] = [];
@@ -43,10 +45,16 @@ export function write(key: string, value: unknown) {
 export function preferences(): Preferences {
   const v = read<Partial<Preferences>>('preferences', {});
   return {
+    appearanceVersion: 2,
     sound: typeof v?.sound === 'boolean' ? v.sound : true,
     targets: typeof v?.targets === 'boolean' ? v.targets : true,
     coordinates: typeof v?.coordinates === 'boolean' ? v.coordinates : true,
-    theme: ['walnut', 'sage', 'violet'].includes(v?.theme || '') ? v.theme! : 'walnut',
+    // The first release persisted its brown default for every visitor. Switch that
+    // legacy appearance to the new green board, keeping all nonvisual preferences.
+    theme:
+      v?.appearanceVersion === 2 && ['green', 'walnut', 'slate'].includes(v.theme || '')
+        ? v.theme!
+        : 'green',
   };
 }
 export function savedGames(): SavedGame[] {

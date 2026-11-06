@@ -7,4 +7,6 @@
 - **React** and **Next.js**: MIT; see installed package licenses.
 - **Replica skill pack**: MIT, Jake Schincariol; https://github.com/Jakeschincariol/replica-skill. License preserved in `.agents/skills/REPLICA-LICENSE`.
 
-Bot artwork, chess-piece SVG artwork, interface copy and training positions were authored for this project. No target app assets or bot identities are bundled.
+**Cburnett chess pieces**, Colin M. L. Burnett: GPL-2.0-or-later. All 12 unmodified SVG source files, license, attribution, upstream links and SHA-256 checksums are bundled under `apps/web/public/pieces/cburnett/` and served at `/pieces/cburnett/`. These replace the initial hand-drawn set.
+
+Bot artwork, the wordmark, interface copy and training positions were authored for this project. No target app assets or bot identities are bundled.

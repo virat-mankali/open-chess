@@ -4,10 +4,8 @@ import {
   ArrowDownToLine,
   ArrowLeft,
   ArrowRight,
-  AudioLines,
   BookOpen,
   Check,
-  ChevronDown,
   ChevronRight,
   CircleHelp,
   Clock3,
@@ -34,15 +32,7 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
-import {
-  BOTS,
-  Chess,
-  QUALITIES,
-  openingName,
-  type Bot,
-  type Color,
-  type MoveRecord,
-} from '@open-chess/chess-core';
+import { BOTS, Chess, QUALITIES, openingName, type Color } from '@open-chess/chess-core';
 import { Board } from './components/Board';
 import { Avatar, Piece } from './components/Artwork';
 import { QualityGuide, ReviewPanel } from './components/ReviewPanel';
@@ -251,38 +241,24 @@ export default function App() {
             open<span>chess</span>
           </span>
         </a>
-        <span className="sidebar-label">YOUR CHESS SPACE</span>
+
         <nav aria-label="Main navigation">
           {nav.map((n) => (
             <button
               key={n.id}
-              className={`nav-item ${page === n.id ? 'active' : ''}`}
+              className={`nav-item nav-${n.id} ${page === n.id ? 'active' : ''}`}
+              aria-label={n.label}
+              aria-current={page === n.id ? 'page' : undefined}
               onClick={() => navigate(n.id)}
             >
-              <n.icon size={20} />
+              <n.icon size={26} />
               <span>{n.label}</span>
-              {n.id === 'play' && <span className="nav-dot" />}
             </button>
           ))}
         </nav>
-        <div className="sidebar-divider" />
-        <div className="sidebar-journey">
-          <div className="journey-icon">
-            <Sparkles size={21} />
-          </div>
-          <h3>
-            A little better,
-            <br />
-            every day.
-          </h3>
-          <p>
-            Great chess starts with
-            <br />
-            one curious move.
-          </p>
-          <button onClick={() => navigate('learn')}>
-            Find your next lesson
-            <ArrowRight size={16} />
+        <div className="sidebar-new-game">
+          <button className="button secondary full-width" disabled={chess.busy} onClick={newGame}>
+            <Swords size={18} /> New game
           </button>
         </div>
         <div className="sidebar-bottom">
@@ -311,7 +287,7 @@ export default function App() {
           onClick={() => setMobileNav(false)}
         />
       )}
-      <div className="main-shell">
+      <div className={`main-shell ${page === 'play' || page === 'review' ? 'game-page' : ''}`}>
         <header className="topbar">
           <div className="breadcrumb">
             <button
@@ -343,31 +319,6 @@ export default function App() {
         <main>
           {(page === 'play' || page === 'review') && (
             <>
-              <div className="page-intro play-intro">
-                <div>
-                  <span className="eyebrow">
-                    {page === 'review'
-                      ? 'LOOK BACK. MOVE FORWARD.'
-                      : 'YOUR NEXT BRILLIANT MOVE STARTS HERE'}
-                  </span>
-                  <h1>
-                    {page === 'review' ? 'Every game has a lesson.' : 'Play at your pace.'}
-                    <span className="heading-spark">✳</span>
-                  </h1>
-                  <p>
-                    {page === 'review'
-                      ? 'Find the turning points, understand your choices, and take the next step.'
-                      : 'A worthy opponent. A little guidance. A better player, one move at a time.'}
-                  </p>
-                </div>
-                <div className="intro-badge">
-                  <span>♞</span>
-                  <div>
-                    <b>Room to grow.</b>
-                    <span>From first moves to master.</span>
-                  </div>
-                </div>
-              </div>
               <div className="game-layout">
                 <section className="board-column" aria-label="Chess game">
                   <div className="player-strip">
@@ -557,15 +508,11 @@ export default function App() {
                         <BookOpen size={19} />
                       </span>
                       <div>
-                        <b>
-                          {history.length
-                            ? openingName(history)
-                            : 'The best opponent is a little better than you.'}
-                        </b>
+                        <b>{history.length ? openingName(history) : 'Ready to play?'}</b>
                         <p>
                           {history.length
                             ? 'Keep your pieces active, your king safe, and your mind curious.'
-                            : 'Pick a bot that challenges you. There’s no clock and no pressure.'}
+                            : 'Choose an opponent and press Play to start your game.'}
                         </p>
                       </div>
                     </div>
@@ -593,6 +540,10 @@ export default function App() {
                   )}
                 </section>
                 <aside className="game-panel">
+                  <div className="game-panel-heading">
+                    {page === 'review' ? <TrendingUp size={28} /> : <Swords size={28} />}
+                    <h1>{page === 'review' ? 'Game Review' : 'Play Computer'}</h1>
+                  </div>
                   <div className="panel-tabs" role="tablist" aria-label="Game panel">
                     <button
                       role="tab"
@@ -701,8 +652,8 @@ export default function App() {
                       <div className="bot-selector">
                         <div className="panel-heading">
                           <div>
-                            <h2>Meet your next rival.</h2>
-                            <p>Big personalities. Every level.</p>
+                            <h2>Choose your opponent</h2>
+                            <p>Find a bot for your level.</p>
                           </div>
                           <span className="bot-total">12 bots</span>
                         </div>
@@ -775,7 +726,7 @@ export default function App() {
                       <div className="game-setup">
                         <div className="setup-label">
                           <h3>Play as</h3>
-                          <span>Your side of the story</span>
+                          <span>White moves first</span>
                         </div>
                         <div className="side-options" role="group" aria-label="Choose your color">
                           <button
@@ -871,26 +822,6 @@ export default function App() {
                   )}
                 </aside>
               </div>
-              <div className="bottom-cards">
-                <button onClick={() => navigate('learn')}>
-                  <span className="bottom-card-icon lavender">
-                    <GraduationCap size={23} />
-                  </span>
-                  <div>
-                    <b>New to the board?</b>
-                    <p>Build confidence, one lesson at a time.</p>
-                  </div>
-                  <ArrowUpRightIcon />
-                </button>
-                <button onClick={() => setModal('guide')}>
-                  <span className="bottom-card-icon teal">!!</span>
-                  <div>
-                    <b>Chase the idea. Find the brilliant.</b>
-                    <p>Discover what makes a move truly special.</p>
-                  </div>
-                  <ArrowUpRightIcon />
-                </button>
-              </div>
             </>
           )}
           {(page === 'learn' || page === 'puzzles') && (
@@ -947,7 +878,7 @@ export default function App() {
         <Dialog
           title={
             modal === 'settings'
-              ? 'Make yourself at home.'
+              ? 'Board & settings'
               : modal === 'guide'
                 ? 'A little guidance goes a long way.'
                 : modal === 'import'
@@ -964,7 +895,7 @@ export default function App() {
             <div className="settings-content">
               <h3>Board palette</h3>
               <div className="theme-options">
-                {(['walnut', 'sage', 'violet'] as const).map((theme) => (
+                {(['green', 'walnut', 'slate'] as const).map((theme) => (
                   <button
                     key={theme}
                     className={`theme-option theme-${theme} ${prefs.theme === theme ? 'selected' : ''}`}
@@ -1053,6 +984,15 @@ export default function App() {
                 progress are saved only in this browser. Clear browser data and those saves are
                 removed; export important games as PGN.
               </p>
+              <a
+                className="text-link"
+                href="/pieces/cburnett/SOURCE.txt"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Chess pieces by Colin M. L. Burnett · GPL-2.0+
+              </a>
+              <br />
               <a className="text-link" href="/engine/COPYING.txt" target="_blank" rel="noreferrer">
                 Stockfish GPL license
               </a>
@@ -1158,21 +1098,6 @@ export default function App() {
         </Dialog>
       )}
     </div>
-  );
-}
-function ArrowUpRightIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      aria-hidden="true"
-    >
-      <path d="M7 17 17 7M7 7h10v10" />
-    </svg>
   );
 }
 function Library({

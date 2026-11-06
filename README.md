@@ -58,7 +58,9 @@ Add a future standalone backend as `apps/api`, and shared API contracts as `pack
 - A conservative sound-sacrifice detector for Brilliant; critical best moves can earn Great.
 - Local autosave/resume, game library, PGN export and full-game PGN import analysis.
 - Four original introductory lessons and six original tactical exercises.
-- Three board palettes, sound controls, coordinates, legal-move guides, keyboard selection, drag/drop, and responsive layouts.
+- Four board styles (textured linen, green, walnut, slate), independent Sculpted/Classic SVG piece styles, sound controls, coordinates, legal-move guides, keyboard selection, pointer-following drag/drop, and responsive layouts.
+- Immediate legal moves and autosaves; independent gameplay and review workers keep analysis off the interaction path.
+- Paired player accuracy, move-quality breakdown, readable shared badges and a live coach focused on your latest move.
 
 ## Scope and limits
 

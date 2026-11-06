@@ -1,0 +1,3 @@
+OpenChess Sculpted pieces. Original SVG implementation for OpenChess, following the user-supplied visual reference.
+Charcoal and ivory Staunton shapes, rounded bases and relief shading.
+All editable SVG source is included alongside this file.

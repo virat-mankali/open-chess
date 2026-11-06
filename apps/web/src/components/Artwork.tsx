@@ -1,10 +1,18 @@
 import type { Color, PieceSymbol, Bot } from '@open-chess/chess-core';
 
-export function Piece({ type, color }: { type: PieceSymbol; color: Color }) {
+export function Piece({
+  type,
+  color,
+  set = 'sculpted',
+}: {
+  type: PieceSymbol;
+  color: Color;
+  set?: 'sculpted' | 'classic';
+}) {
   return (
     <img
       className="chess-piece"
-      src={`/pieces/cburnett/${color}${type.toUpperCase()}.svg`}
+      src={`/pieces/${set === 'classic' ? 'cburnett' : 'sculpted'}/${color}${type.toUpperCase()}.svg`}
       width={45}
       height={45}
       alt=""

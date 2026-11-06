@@ -35,6 +35,7 @@ import {
 import { BOTS, Chess, QUALITIES, openingName, type Color } from '@open-chess/chess-core';
 import { Board } from './components/Board';
 import { Avatar, Piece } from './components/Artwork';
+import { QualityBadge } from './components/QualityBadge';
 import { QualityGuide, ReviewPanel } from './components/ReviewPanel';
 import { Training } from './components/Training';
 import { preferences, progress, savedGames, write, type SavedGame } from './storage/local';
@@ -130,28 +131,25 @@ export default function App() {
   const [mobileNav, setMobileNav] = useState(false);
   const [pgnInput, setPgnInput] = useState('');
   const bot = BOTS.find((b) => b.id === session.botId) || BOTS[1];
-  const displayBot = session.active || session.records.length ? bot : selectedBot;
-  const currentRecord = cursor === null ? session.records.at(-1) : session.records[cursor - 1];
-  const initialFen = session.records[0]?.before || new Chess().fen();
+  const displayBot = session.active || session.pgn ? bot : selectedBot;
+  const moves = game.history({ verbose: true });
+  const history = moves.map((move) => move.san);
+  const selectedPly = cursor ?? moves.length;
+  const currentRecord = session.records[selectedPly - 1];
+  const selectedMove = moves[selectedPly - 1];
+  const initialFen = moves[0]?.before || new Chess().fen();
   const boardFen =
-    cursor !== null
-      ? cursor === 0
-        ? initialFen
-        : session.records[cursor - 1]?.after || game.fen()
-      : game.fen();
+    cursor === null ? game.fen() : cursor === 0 ? initialFen : selectedMove?.after || game.fen();
   const orientation: Color = flipped ? (session.color === 'w' ? 'b' : 'w') : session.color;
-  const currentMove = currentRecord
-    ? { from: currentRecord.uci.slice(0, 2), to: currentRecord.uci.slice(2, 4) }
-    : undefined;
+  const currentMove = selectedMove ? { from: selectedMove.from, to: selectedMove.to } : undefined;
   const showAnalysis = session.mode === 'coach' || !session.active;
-  const score = currentRecord?.cp || 0;
-  const history = game.history();
+  const score = currentRecord?.cp ?? 0;
   const latestPlayerRecord = [...session.records].reverse().find((r) => r.color === session.color);
-  const prevCount = useRef(session.records.length);
+  const prevCount = useRef(moves.length);
   useEffect(() => {
-    if (session.records.length > prevCount.current && prefs.sound) moveSound();
-    prevCount.current = session.records.length;
-  }, [session.records.length, prefs.sound]);
+    if (moves.length > prevCount.current && prefs.sound) moveSound();
+    prevCount.current = moves.length;
+  }, [moves.length, prefs.sound]);
   useEffect(() => {
     write('preferences', prefs);
   }, [prefs]);
@@ -165,16 +163,16 @@ export default function App() {
         return;
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        setCursor((c) => Math.max(0, (c ?? session.records.length) - 1));
+        setCursor((c) => Math.max(0, (c ?? moves.length) - 1));
       }
       if (e.key === 'ArrowRight') {
         e.preventDefault();
-        setCursor((c) => (c === null ? null : Math.min(session.records.length, c + 1)));
+        setCursor((c) => (c === null ? null : Math.min(moves.length, c + 1)));
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [modal, page, session.records.length]);
+  }, [modal, page, moves.length]);
   function navigate(next: Page) {
     setPage(next);
     setMobileNav(false);
@@ -189,6 +187,7 @@ export default function App() {
   function begin() {
     setCursor(null);
     setFlipped(false);
+    setTab('review');
     void chess.start(
       selectedBot,
       side === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : side,
@@ -197,7 +196,7 @@ export default function App() {
     );
   }
   function newGame() {
-    if (session.active && session.records.length) setModal('new');
+    if (session.active && moves.length) setModal('new');
     else {
       chess.newSetup();
       setCursor(null);
@@ -330,7 +329,7 @@ export default function App() {
                           {displayBot.name}
                           <span className="bot-label">BOT</span>
                           <span className="rating">
-                            {session.active || session.records.length
+                            {session.active || session.pgn
                               ? session.elo
                               : displayBot.id === 'custom'
                                 ? customElo
@@ -358,14 +357,22 @@ export default function App() {
                     {showAnalysis && (
                       <div
                         className="evaluation-bar"
-                        aria-label={`Evaluation ${Math.abs(score) >= 9000 ? 'mate' : (score / 100).toFixed(1)} pawns for White`}
+                        aria-label={
+                          currentRecord
+                            ? `Evaluation ${Math.abs(score) >= 9000 ? 'mate' : (score / 100).toFixed(1)} pawns for White`
+                            : 'Evaluation pending'
+                        }
                       >
                         <div
                           className="eval-white"
                           style={{ height: `${Math.max(4, Math.min(96, 50 + score / 12))}%` }}
                         />
                         <span>
-                          {Math.abs(score) >= 9000 ? 'M' : Math.abs(score / 100).toFixed(1)}
+                          {!currentRecord
+                            ? '—'
+                            : Math.abs(score) >= 9000
+                              ? 'M'
+                              : Math.abs(score / 100).toFixed(1)}
                         </span>
                       </div>
                     )}
@@ -384,9 +391,35 @@ export default function App() {
                       preferences={prefs}
                       lastMove={currentMove}
                       hint={chess.hint}
-                      quality={showAnalysis ? currentRecord : undefined}
+                      quality={
+                        showAnalysis && currentRecord?.after === boardFen
+                          ? currentRecord
+                          : undefined
+                      }
                     />
                   </div>
+                  {showAnalysis && selectedMove && (
+                    <div className="board-review-caption" aria-live="polite">
+                      {currentRecord ? (
+                        <>
+                          <QualityBadge quality={currentRecord.quality} size="sm" />
+                          <b>{selectedMove.san}</b>
+                          <span>{QUALITIES[currentRecord.quality].label}</span>
+                        </>
+                      ) : (
+                        <>
+                          <LoaderCircle
+                            size={14}
+                            className={chess.reviewState === 'error' ? '' : 'spin'}
+                          />
+                          <b>{selectedMove.san}</b>
+                          <span>
+                            {chess.reviewState === 'error' ? 'Review paused' : 'Analyzing move…'}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div className="player-strip bottom-player">
                     <div className="player-identity">
                       <div className="you-avatar">
@@ -427,7 +460,7 @@ export default function App() {
                           chess.busy ||
                           !session.active ||
                           session.mode === 'challenge' ||
-                          !session.records.length
+                          !moves.length
                         }
                         onClick={() => {
                           chess.undo();
@@ -542,8 +575,8 @@ export default function App() {
                 </section>
                 <aside className="game-panel">
                   <div className="game-panel-heading">
-                    {page === 'review' ? <TrendingUp size={28} /> : <Swords size={28} />}
-                    <h1>{page === 'review' ? 'Game Review' : 'Play Computer'}</h1>
+                    {tab === 'review' ? <TrendingUp size={28} /> : <Swords size={28} />}
+                    <h1>{tab === 'review' ? 'Game Review' : 'Play Computer'}</h1>
                   </div>
                   <div className="panel-tabs" role="tablist" aria-label="Game panel">
                     <button
@@ -563,14 +596,18 @@ export default function App() {
                     >
                       <TrendingUp size={17} />
                       Game review
-                      {session.records.length > 0 && (
-                        <span className="tab-count">{session.records.length}</span>
-                      )}
+                      {moves.length > 0 && <span className="tab-count">{moves.length}</span>}
                     </button>
                   </div>
                   {tab === 'review' ? (
                     <ReviewPanel
                       records={session.records}
+                      moves={moves}
+                      opponent={bot.name}
+                      pieces={prefs.pieces}
+                      reviewState={chess.reviewState}
+                      reviewError={chess.reviewError}
+                      onRetry={chess.retryReview}
                       color={session.color}
                       cursor={cursor}
                       onSelect={setCursor}
@@ -613,11 +650,7 @@ export default function App() {
                             setCursor(latestPlayerRecord.ply);
                           }}
                         >
-                          <span
-                            className={`quality-icon quality-${QUALITIES[latestPlayerRecord.quality].color}`}
-                          >
-                            {QUALITIES[latestPlayerRecord.quality].symbol}
-                          </span>
+                          <QualityBadge quality={latestPlayerRecord.quality} />
                           <div>
                             <strong>{QUALITIES[latestPlayerRecord.quality].label}</strong>
                             <span>You played {latestPlayerRecord.san}. See why.</span>
@@ -736,7 +769,7 @@ export default function App() {
                             aria-pressed={side === 'w'}
                           >
                             <span className="side-piece">
-                              <Piece type="k" color="w" />
+                              <Piece type="k" color="w" set={prefs.pieces} />
                             </span>
                             White
                           </button>
@@ -754,7 +787,7 @@ export default function App() {
                             aria-pressed={side === 'b'}
                           >
                             <span className="side-piece">
-                              <Piece type="k" color="b" />
+                              <Piece type="k" color="b" set={prefs.pieces} />
                             </span>
                             Black
                           </button>
@@ -894,11 +927,15 @@ export default function App() {
         >
           {modal === 'settings' && (
             <div className="settings-content">
-              <h3>Board palette</h3>
+              <h3>Board style</h3>
+              <p className="setting-description">
+                Choose the textured reference board or a classic color palette.
+              </p>
               <div className="theme-options">
-                {(['green', 'walnut', 'slate'] as const).map((theme) => (
+                {(['linen', 'green', 'walnut', 'slate'] as const).map((theme) => (
                   <button
                     key={theme}
+                    aria-pressed={prefs.theme === theme}
                     className={`theme-option theme-${theme} ${prefs.theme === theme ? 'selected' : ''}`}
                     onClick={() => setPrefs((p) => ({ ...p, theme }))}
                   >
@@ -910,6 +947,29 @@ export default function App() {
                     </span>
                     <b>{theme[0].toUpperCase() + theme.slice(1)}</b>
                     {prefs.theme === theme && <Check size={16} />}
+                  </button>
+                ))}
+              </div>
+              <h3>Piece style</h3>
+              <p className="setting-description">Change the pieces independently of the board.</p>
+              <div className="piece-set-options">
+                {(['sculpted', 'classic'] as const).map((pieces) => (
+                  <button
+                    key={pieces}
+                    className={`piece-set-option ${prefs.pieces === pieces ? 'selected' : ''}`}
+                    aria-pressed={prefs.pieces === pieces}
+                    aria-label={`${pieces === 'sculpted' ? 'Sculpted' : 'Classic'} pieces`}
+                    onClick={() => setPrefs((p) => ({ ...p, pieces }))}
+                  >
+                    <span className="piece-set-preview">
+                      <Piece type="n" color="w" set={pieces} />
+                      <Piece type="n" color="b" set={pieces} />
+                    </span>
+                    <b>{pieces === 'sculpted' ? 'Sculpted' : 'Classic'}</b>
+                    <small>
+                      {pieces === 'sculpted' ? 'From your reference' : 'Traditional outlines'}
+                    </small>
+                    {prefs.pieces === pieces && <Check size={16} />}
                   </button>
                 ))}
               </div>
@@ -991,7 +1051,7 @@ export default function App() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Chess pieces by Colin M. L. Burnett · GPL-2.0+
+                Classic pieces by Colin M. L. Burnett · GPL-2.0+
               </a>
               <br />
               <a className="text-link" href="/engine/COPYING.txt" target="_blank" rel="noreferrer">
@@ -1133,6 +1193,9 @@ function Library({
     <div className="game-library">
       {games.map((g) => {
         const bot = BOTS.find((b) => b.id === g.botId) || BOTS[1];
+        const position = new Chess();
+        position.loadPgn(g.pgn);
+        const played = position.history().length;
         return (
           <article className="saved-game" key={g.id}>
             <Avatar bot={bot} size="md" />
@@ -1142,7 +1205,7 @@ function Library({
                 <span>{g.elo}</span>
               </h3>
               <p>
-                {g.result || 'In progress'} · {Math.ceil(g.records.length / 2)} moves
+                {g.result || 'In progress'} · {Math.ceil(played / 2)} moves
               </p>
               <small>
                 {new Date(g.date).toLocaleDateString(undefined, {

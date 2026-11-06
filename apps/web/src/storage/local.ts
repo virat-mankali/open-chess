@@ -11,18 +11,20 @@ export type SavedGame = {
   mode: 'coach' | 'challenge';
 };
 export type Preferences = {
-  appearanceVersion: 2;
+  appearanceVersion: 3;
   sound: boolean;
   targets: boolean;
   coordinates: boolean;
-  theme: 'green' | 'walnut' | 'slate';
+  theme: 'linen' | 'green' | 'walnut' | 'slate';
+  pieces: 'sculpted' | 'classic';
 };
 export const defaults: Preferences = {
-  appearanceVersion: 2,
+  appearanceVersion: 3,
   sound: true,
   targets: true,
   coordinates: true,
-  theme: 'green',
+  theme: 'linen',
+  pieces: 'sculpted',
 };
 let cachedRaw: string | null = null;
 let cachedGames: SavedGame[] = [];
@@ -45,16 +47,16 @@ export function write(key: string, value: unknown) {
 export function preferences(): Preferences {
   const v = read<Partial<Preferences>>('preferences', {});
   return {
-    appearanceVersion: 2,
+    appearanceVersion: 3,
     sound: typeof v?.sound === 'boolean' ? v.sound : true,
     targets: typeof v?.targets === 'boolean' ? v.targets : true,
     coordinates: typeof v?.coordinates === 'boolean' ? v.coordinates : true,
-    // The first release persisted its brown default for every visitor. Switch that
-    // legacy appearance to the new green board, keeping all nonvisual preferences.
+    // Adopt the reference board once; later explicit board/piece selections persist.
     theme:
-      v?.appearanceVersion === 2 && ['green', 'walnut', 'slate'].includes(v.theme || '')
+      v?.appearanceVersion === 3 && ['linen', 'green', 'walnut', 'slate'].includes(v.theme || '')
         ? v.theme!
-        : 'green',
+        : 'linen',
+    pieces: v?.appearanceVersion === 3 && v.pieces === 'classic' ? 'classic' : 'sculpted',
   };
 }
 export function savedGames(): SavedGame[] {
@@ -92,7 +94,7 @@ export function savedGames(): SavedGame[] {
       chess.loadPgn(g.pgn);
       const moves = chess.history({ verbose: true });
       return (
-        g.records.length === moves.length &&
+        g.records.length <= moves.length &&
         g.records.every(
           (r: MoveRecord, i: number) =>
             r &&

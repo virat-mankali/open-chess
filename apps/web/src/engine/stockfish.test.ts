@@ -63,6 +63,21 @@ describe('real Stockfish WASM integration via UCI transport', () => {
     expect(() => playUci(black, b.bestMove)).not.toThrow();
     expect(b.lines.every((l) => l.pv[0] === l.move)).toBe(true);
   });
+  it('keeps gameplay available when the separate review worker is stopped', async () => {
+    const reviewEngine = new StockfishEngine();
+    try {
+      await Promise.all([engine.initialize(), reviewEngine.initialize()]);
+      const game = new Chess();
+      game.move('e4');
+      const reply = engine.search(game.fen(), { time: 200 });
+      reviewEngine.dispose();
+      const evaluation = await reply;
+      expect(() => playUci(game, evaluation.bestMove)).not.toThrow();
+      expect(game.turn()).toBe('w');
+    } finally {
+      reviewEngine.dispose();
+    }
+  });
   it('treats checkmate and stalemate as terminal without stale moves', async () => {
     const mate = await engine.search('7k/6Q1/5K2/8/8/8/8/8 b - - 0 1');
     expect(mate.cp).toBe(10000);

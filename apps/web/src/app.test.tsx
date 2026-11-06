@@ -59,6 +59,21 @@ describe('F01–F03 game and coach flows', () => {
     expect(savedGames()[0].pgn).toContain('e4');
     expect(screen.getByRole('button', { name: 'e4 white pawn' })).toBeTruthy();
     expect(savedGames()[0].records.every((r) => r.explanation.length > 20)).toBe(true);
+    expect(screen.getByText(/Your last move/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /^e4 / })).toBeTruthy();
+  });
+  it('shows both players in the review overview and returns to the move explanation', async () => {
+    await setup();
+    await playFirstMove();
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    expect(screen.getByText('Your accuracy')).toBeTruthy();
+    expect(screen.getByText('Bot accuracy')).toBeTruthy();
+    expect(screen.getByText('Move quality')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Brilliant' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Blunder' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Review moves' }));
+    expect(screen.getByRole('heading', { name: /^e4 / })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'First position' })).toBeTruthy();
   });
   it('takes back a complete turn and permits another move', async () => {
     await setup();
@@ -143,6 +158,22 @@ describe('F04–F06 learning, settings and import', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /Board coordinates/ }));
     expect(preferences().coordinates).toBe(false);
   });
+  it('switches board and piece styles independently and preserves them on reload', async () => {
+    await setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Board settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Green' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Classic pieces' }));
+    expect(preferences()).toMatchObject({ theme: 'green', pieces: 'classic' });
+    cleanup();
+    render(<App />);
+    expect(document.querySelector('.board-frame')?.classList.contains('theme-green')).toBe(true);
+    expect(
+      screen
+        .getByRole('button', { name: 'e1 white king' })
+        .querySelector('img')
+        ?.getAttribute('src'),
+    ).toBe('/pieces/cburnett/wK.svg');
+  });
   it('imports a legal PGN and computes one review per move', async () => {
     await setup();
     fireEvent.click(screen.getByRole('button', { name: 'My games' }));
@@ -152,7 +183,7 @@ describe('F04–F06 learning, settings and import', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Analyze game' }));
     await waitFor(() => expect(savedGames()[0]?.records).toHaveLength(4));
-    expect(screen.getByText('Your game, explained.')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Game Review' })).toBeTruthy();
   });
   it('rejects corrupt PGN with an actionable message', async () => {
     await setup();
@@ -171,8 +202,9 @@ describe('board and persistence edge cases', () => {
     const storedGames = localStorage.getItem('openchess.v1.games');
     write('preferences', { theme: 'walnut', sound: false, targets: false, coordinates: false });
     expect(preferences()).toEqual({
-      appearanceVersion: 2,
-      theme: 'green',
+      appearanceVersion: 3,
+      theme: 'linen',
+      pieces: 'sculpted',
       sound: false,
       targets: false,
       coordinates: false,

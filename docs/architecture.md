@@ -6,7 +6,7 @@ The repository root owns the Bun workspace list, lockfile, shared TypeScript con
 
 `apps/web → packages/chess-core → chess.js`
 
-The web app owns React state, the Stockfish browser worker, localStorage, styles and UI. The core package owns chess contracts, grading, bot settings, rules helpers and original learning content. It has no React, DOM, fetch, localStorage, Next.js or environment dependencies. A future backend can import it without bundling the web app.
+The web app owns React state, independent Stockfish gameplay/review workers, localStorage, styles and UI. The core package owns chess contracts, grading, bot settings, rules helpers and original learning content. It has no React, DOM, fetch, localStorage, Next.js or environment dependencies. A future backend can import it without bundling the web app.
 
 `useChessGame` owns live PGN history and session state. Each move is analyzed before and after by an independently configured high-strength search. Bot selection uses a separate strength setting. UCI requests are serialized; generation tokens prevent stale async completions from changing a different game. A failed evaluation rolls back an uncommitted move and offers engine recovery. The bot continues on retry if a human move was already committed.
 
@@ -25,3 +25,9 @@ If using Next.js server routes, remove static export and introduce a server depl
 `bun run dev` launches the Next.js app. `bun run check` typechecks the source, runs Vitest (domain + UI + actual-engine transport integration), then performs a production Next.js build. Test doubles are limited to DOM integration tests; production always uses the real Stockfish worker and has a visible error state if it fails.
 
 The sandbox used for this build blocked child-process execution during Next’s TypeScript phase and the engine transport tests. Running the same validation with permitted local child-process access succeeded. Do not disable typechecking to work around that sandbox behavior.
+
+## Board interaction and appearance
+
+The board handles mouse, pen and touch with pointer capture and a fixed-position SVG overlay. Pointer movement updates only the overlay transform; pointer release maps coordinates through the current board orientation and checks legal moves. Invalid/canceled drops retain the source position. Click and keyboard input remain available. Moves update the PGN immediately; incomplete analysis is persisted as a prefix and recovered without replaying accepted moves.
+
+Preferences appearance version 3 adds an independent piece-set selector and defaults existing visitors to the reference-inspired linen/sculpted appearance once. Explicit subsequent selections persist; the green board and classic Cburnett pieces remain available. Games, sound and assistance choices are preserved.

@@ -1,14 +1,27 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Chess,
   type Color,
   type Square,
   type PieceSymbol,
   type MoveRecord,
-  QUALITIES,
 } from '@open-chess/chess-core';
 import { Piece } from './Artwork';
+import { QualityBadge } from './QualityBadge';
 import type { Preferences } from '../storage/local';
+
+type Drag = {
+  from: Square;
+  type: PieceSymbol;
+  color: Color;
+  pointerId: number;
+  x: number;
+  y: number;
+  size: number;
+  active: boolean;
+  fen: string;
+};
 
 export function Board({
   fen,
@@ -29,6 +42,23 @@ export function Board({
   hint?: string | null;
   quality?: MoveRecord;
 }) {
+  const boardRef = useRef<HTMLDivElement>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<Drag | null>(null);
+  const suppressClick = useRef(false);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  function cancelDrag() {
+    dragRef.current = null;
+    setDrag(null);
+  }
+  useEffect(() => {
+    cancelDrag();
+  }, [fen, orientation, disabled]);
+  useEffect(() => {
+    const cancel = () => cancelDrag();
+    window.addEventListener('blur', cancel);
+    return () => window.removeEventListener('blur', cancel);
+  }, []);
   const [selected, setSelected] = useState<Square | null>(null);
   const [promotion, setPromotion] = useState<{ from: Square; to: Square } | null>(null);
   const promotionRef = useRef<HTMLDialogElement>(null);
@@ -60,6 +90,64 @@ export function Board({
     setSelectionFen(fen);
     setSelected(game.get(square)?.color === game.turn() ? square : null);
   };
+  function pointerDown(e: ReactPointerEvent<HTMLButtonElement>, square: Square) {
+    const piece = game.get(square);
+    if (
+      disabled ||
+      e.isPrimary === false ||
+      e.button !== 0 ||
+      !piece ||
+      piece.color !== game.turn()
+    )
+      return;
+    suppressClick.current = false;
+    const size = boardRef.current!.getBoundingClientRect().width / 8;
+    dragRef.current = {
+      from: square,
+      type: piece.type,
+      color: piece.color,
+      pointerId: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      size,
+      active: false,
+      fen,
+    };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+  function pointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    const candidate = dragRef.current;
+    if (!candidate || candidate.pointerId !== e.pointerId || disabled || candidate.fen !== fen)
+      return;
+    if (!candidate.active && Math.hypot(e.clientX - candidate.x, e.clientY - candidate.y) < 4)
+      return;
+    e.preventDefault();
+    if (!candidate.active) {
+      candidate.active = true;
+      setSelectionFen(fen);
+      setSelected(candidate.from);
+      setDrag({ ...candidate, x: e.clientX, y: e.clientY });
+    }
+    // Moving a single fixed overlay avoids rerendering 64 squares at pointer speed.
+    if (ghostRef.current)
+      ghostRef.current.style.transform = `translate3d(${e.clientX - candidate.size / 2}px, ${e.clientY - candidate.size / 2}px, 0)`;
+  }
+  function pointerUp(e: ReactPointerEvent<HTMLDivElement>) {
+    const candidate = dragRef.current;
+    if (!candidate || candidate.pointerId !== e.pointerId) return;
+    cancelDrag();
+    if (!candidate.active) return; // A normal click is handled by the square button.
+    e.preventDefault();
+    suppressClick.current = true;
+    if (disabled || candidate.fen !== fen) return;
+    const rect = boardRef.current!.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const col = Math.floor(((e.clientX - rect.left) / rect.width) * 8);
+    const row = Math.floor(((e.clientY - rect.top) / rect.height) * 8);
+    if (col < 0 || col > 7 || row < 0 || row > 7) return;
+    const to = (files[col] + ranks[row]) as Square;
+    if (to !== candidate.from) submit(candidate.from, to);
+  }
   const checkedKing = game.isCheck()
     ? game
         .board()
@@ -69,7 +157,18 @@ export function Board({
   return (
     <div className={`board-frame theme-${preferences.theme}`}>
       <div
-        className="board"
+        className={`board ${drag ? 'is-dragging' : ''}`}
+        ref={boardRef}
+        onPointerMove={pointerMove}
+        onPointerUp={pointerUp}
+        onPointerCancel={cancelDrag}
+        onLostPointerCapture={cancelDrag}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            cancelDrag();
+            setSelected(null);
+          }
+        }}
         role="group"
         aria-label={`${game.turn() === 'w' ? 'White' : 'Black'} to move. Chessboard`}
       >
@@ -87,50 +186,49 @@ export function Board({
                 className={`square ${light ? 'light' : 'dark'} ${currentSelected === square ? 'selected' : ''} ${recent ? 'last-move' : ''} ${suggested ? 'hinted' : ''} ${checkedKing === square ? 'checked' : ''}`}
                 aria-label={`${square}${piece ? ` ${piece.color === 'w' ? 'white' : 'black'} ${{ p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' }[piece.type]}` : ''}`}
                 aria-disabled={disabled}
-                onClick={() => select(square)}
-                onDragOver={(e) => {
-                  if (!disabled) e.preventDefault();
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (!disabled) {
-                    const from = e.dataTransfer.getData('text/plain') as Square;
-                    if (/^[a-h][1-8]$/.test(from)) submit(from, square);
+                onClick={(e) => {
+                  if (suppressClick.current && e.detail > 0) {
+                    suppressClick.current = false;
+                    return;
                   }
+                  select(square);
                 }}
+                onPointerDown={(e) => pointerDown(e, square)}
               >
                 {preferences.coordinates && col === 0 && <span className="rank-label">{rank}</span>}
                 {preferences.coordinates && row === 7 && <span className="file-label">{file}</span>}
                 {piece && (
-                  <span
-                    className="piece-drag"
-                    draggable={!disabled && piece.color === game.turn()}
-                    onDragStart={(e) => {
-                      if (disabled) {
-                        e.preventDefault();
-                        return;
-                      }
-                      e.dataTransfer.setData('text/plain', square);
-                      setSelectionFen(fen);
-                      setSelected(square);
-                    }}
-                  >
-                    <Piece type={piece.type} color={piece.color} />
+                  <span className={`piece-drag ${drag?.from === square ? 'drag-source' : ''}`}>
+                    <Piece type={piece.type} color={piece.color} set={preferences.pieces} />
                   </span>
                 )}
                 {preferences.targets && target && (
                   <span className={piece ? 'capture-target' : 'move-target'} />
                 )}
                 {quality && quality.uci.slice(2, 4) === square && (
-                  <span className={`move-badge quality-${QUALITIES[quality.quality].color}`}>
-                    {QUALITIES[quality.quality].symbol}
-                  </span>
+                  <QualityBadge quality={quality.quality} size="board" className="move-badge" />
                 )}
               </button>
             );
           }),
         )}
       </div>
+      {drag &&
+        createPortal(
+          <div
+            className="dragged-piece"
+            ref={ghostRef}
+            aria-hidden="true"
+            style={{
+              width: drag.size,
+              height: drag.size,
+              transform: `translate3d(${drag.x - drag.size / 2}px, ${drag.y - drag.size / 2}px, 0)`,
+            }}
+          >
+            <Piece type={drag.type} color={drag.color} set={preferences.pieces} />
+          </div>,
+          document.body,
+        )}
       {promotion && (
         <dialog
           ref={promotionRef}
@@ -155,7 +253,7 @@ export function Board({
                     setPromotion(null);
                   }}
                 >
-                  <Piece type={type} color={game.turn()} />
+                  <Piece type={type} color={game.turn()} set={preferences.pieces} />
                 </button>
               ))}
             </div>

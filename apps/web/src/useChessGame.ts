@@ -37,8 +37,8 @@ function fresh(
 }
 function initial() {
   const id = read<string | null>('active', null);
-  const saved = savedGames().find((g) => g.id === id && !g.result);
-  return saved ? { ...saved, active: true } : fresh();
+  const saved = savedGames().find((g) => g.id === id);
+  return saved ? { ...saved, active: !saved.result } : fresh();
 }
 export function useChessGame(onNotice: (message: string) => void) {
   const [session, setSession] = useState<Session>(initial);
@@ -54,49 +54,75 @@ export function useChessGame(onNotice: (message: string) => void) {
   const [error, setError] = useState('');
   const [engineVersion, setEngineVersion] = useState(0);
   const engine = useRef<StockfishEngine | null>(null);
+  // Gameplay and review have independent workers. Review must never delay input
+  // or the opponent's reply, even when several fast moves await analysis.
+  const reviewEngine = useRef<StockfishEngine | null>(null);
+  const reviewJob = useRef<{ token: number; service: StockfishEngine } | null>(null);
+  const [reviewState, setReviewState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [reviewError, setReviewError] = useState('');
+  const [reviewVersion, setReviewVersion] = useState(0);
+  const importing = useRef(false);
   const generation = useRef(0);
   const [hint, setHint] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState<number | null>(null);
   function update(next: Session) {
     sessionRef.current = next;
     setSession(next);
-    if (next.active || next.records.length) {
+    if (next.active || game.current!.history().length) {
       if (!saveGame(next))
         onNotice('Your browser could not save this game. Export the PGN to keep a copy.');
     }
-    write('active', next.active ? next.id : null);
+    const pending = game.current!.history().length > next.records.length;
+    write('active', next.active || pending ? next.id : null);
   }
   function setWorking(value: boolean) {
     busyRef.current = value;
     setBusy(value);
   }
-  async function commitMove(moveUci: string, token: number) {
-    const current = game.current!;
-    const service = engine.current!;
-    const before = await service.search(current.fen(), { time: 500, multiPV: 3 });
+  function commitMove(moveUci: string, token: number) {
     if (token !== generation.current) return false;
-    const move = playUci(current, moveUci);
+    const current = game.current!;
+    // Apply and persist the legal move before any engine work or await.
+    playUci(current, moveUci);
+    const result = gameOutcome(current);
+    if (result)
+      current.header(
+        'Result',
+        current.isCheckmate() ? (current.turn() === 'w' ? '0-1' : '1-0') : '1/2-1/2',
+      );
+    update({ ...sessionRef.current, pgn: current.pgn(), result, active: !result });
+    return true;
+  }
+  async function analyzePending(token: number, service: StockfishEngine) {
+    const job = { token, service };
+    reviewJob.current = job;
     try {
-      const after = await service.search(current.fen(), { time: 450, multiPV: 2 });
-      if (token !== generation.current) return false;
-      const record = reviewMove(move, before, after, sessionRef.current.records.length + 1);
-      const result = gameOutcome(current);
-      if (result)
-        current.header(
-          'Result',
-          current.isCheckmate() ? (current.turn() === 'w' ? '0-1' : '1-0') : '1/2-1/2',
-        );
-      update({
-        ...sessionRef.current,
-        pgn: current.pgn(),
-        records: [...sessionRef.current.records, record],
-        result,
-        active: !result,
-      });
-      return true;
+      while (
+        token === generation.current &&
+        service === reviewEngine.current &&
+        !importing.current
+      ) {
+        const ply = sessionRef.current.records.length + 1;
+        const move = game.current!.history({ verbose: true })[ply - 1];
+        if (!move) break;
+        const before = await service.search(move.before, { time: 500, multiPV: 3 });
+        if (token !== generation.current || service !== reviewEngine.current) return;
+        const after = await service.search(move.after, { time: 450, multiPV: 2 });
+        if (token !== generation.current || service !== reviewEngine.current) return;
+        const record = reviewMove(move, before, after, ply);
+        update({ ...sessionRef.current, records: [...sessionRef.current.records, record] });
+      }
     } catch (e) {
-      current.undo();
-      throw e;
+      if (token === generation.current && service === reviewEngine.current) {
+        const message = e instanceof Error ? e.message : 'Move review is unavailable.';
+        setReviewError(message);
+        setReviewState('error');
+        onNotice(
+          'Your moves are saved. Move review paused; you can keep playing or retry analysis.',
+        );
+      }
+    } finally {
+      if (reviewJob.current === job) reviewJob.current = null;
     }
   }
   async function botTurn(token: number) {
@@ -109,14 +135,15 @@ export function useChessGame(onNotice: (message: string) => void) {
       return;
     const current = game.current!;
     const settings = botSettings(sessionRef.current.elo);
-    const evaluation = await engine.current!.search(current.fen(), settings);
-    if (token !== generation.current) return;
+    const service = engine.current!;
+    const evaluation = await service.search(current.fen(), settings);
+    if (token !== generation.current || service !== engine.current) return;
     const selected = chooseBotMove(
       evaluation,
       current.moves({ verbose: true }),
       sessionRef.current.elo,
     );
-    await commitMove(selected, token);
+    commitMove(selected, token);
   }
   function handleError(e: unknown) {
     const message = e instanceof Error ? e.message : 'The engine could not finish this move.';
@@ -151,12 +178,44 @@ export function useChessGame(onNotice: (message: string) => void) {
       });
     return () => {
       cancelled = true;
-      generation.current++;
+      if (engine.current === service) engine.current = null;
       service.dispose();
     };
     // The engine is intentionally replaced only by an explicit retry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineVersion]);
+  useEffect(() => {
+    const service = new StockfishEngine();
+    reviewEngine.current = service;
+    let cancelled = false;
+    setReviewState('loading');
+    setReviewError('');
+    service
+      .initialize()
+      .then(() => {
+        if (!cancelled) setReviewState('ready');
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setReviewState('error');
+          setReviewError(e instanceof Error ? e.message : 'Review could not start.');
+        }
+      });
+    return () => {
+      cancelled = true;
+      if (reviewEngine.current === service) reviewEngine.current = null;
+      service.dispose();
+    };
+  }, [reviewVersion]);
+  useEffect(() => {
+    const service = reviewEngine.current;
+    const token = generation.current;
+    if (!service || reviewState !== 'ready' || importing.current) return;
+    if (reviewJob.current?.token === token && reviewJob.current.service === service) return;
+    void analyzePending(token, service);
+    // Read the current PGN/record prefix from refs when continuing the queue.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.pgn, session.records.length, reviewState, reviewVersion, importProgress]);
   async function start(bot: Bot, color: Color, mode: 'coach' | 'challenge', elo = bot.elo) {
     if (busyRef.current || engineState !== 'ready') return;
     const token = ++generation.current;
@@ -201,7 +260,7 @@ export function useChessGame(onNotice: (message: string) => void) {
     setWorking(true);
     setHint(null);
     try {
-      if (await commitMove(from + to + (legal.promotion || ''), token)) await botTurn(token);
+      if (commitMove(from + to + (legal.promotion || ''), token)) await botTurn(token);
     } catch (e) {
       handleError(e);
     } finally {
@@ -216,14 +275,13 @@ export function useChessGame(onNotice: (message: string) => void) {
       !game.current!.history().length
     )
       return;
-    let count = 0;
+    generation.current++;
     do {
       game.current!.undo();
-      count++;
     } while (game.current!.history().length && game.current!.turn() !== sessionRef.current.color);
     update({
       ...sessionRef.current,
-      records: sessionRef.current.records.slice(0, -count),
+      records: sessionRef.current.records.slice(0, game.current!.history().length),
       pgn: game.current!.pgn(),
       result: null,
       active: true,
@@ -281,7 +339,10 @@ export function useChessGame(onNotice: (message: string) => void) {
     setHint(null);
   }
   async function importPgn(text: string) {
-    if (busyRef.current || engineState !== 'ready') return false;
+    if (busyRef.current || reviewState !== 'ready') {
+      onNotice('Wait for analysis to be ready, or retry it before importing a game.');
+      return false;
+    }
     if (text.length > 1000000) {
       onNotice('This PGN is too large. Import one game at a time.');
       return false;
@@ -300,13 +361,14 @@ export function useChessGame(onNotice: (message: string) => void) {
     }
     const token = ++generation.current;
     setWorking(true);
+    importing.current = true;
     setImportProgress(0);
     const records: MoveRecord[] = [];
     try {
       for (let i = 0; i < moves.length; i++) {
         const move = moves[i];
-        const before = await engine.current!.search(move.before, { time: 350, multiPV: 3 });
-        const after = await engine.current!.search(move.after, { time: 350, multiPV: 2 });
+        const before = await reviewEngine.current!.search(move.before, { time: 350, multiPV: 3 });
+        const after = await reviewEngine.current!.search(move.after, { time: 350, multiPV: 2 });
         if (token !== generation.current) return false;
         records.push(reviewMove(move, before, after, i + 1));
         setImportProgress(Math.round(((i + 1) / moves.length) * 100));
@@ -325,6 +387,7 @@ export function useChessGame(onNotice: (message: string) => void) {
       return false;
     } finally {
       setWorking(false);
+      importing.current = false;
       setImportProgress(null);
     }
   }
@@ -336,6 +399,10 @@ export function useChessGame(onNotice: (message: string) => void) {
     error,
     hint,
     importProgress,
+    reviewState,
+    reviewError,
+    pendingReviews: Math.max(0, game.current!.history().length - session.records.length),
+    retryReview: () => setReviewVersion((v) => v + 1),
     start,
     move,
     undo,
@@ -345,6 +412,8 @@ export function useChessGame(onNotice: (message: string) => void) {
     newSetup,
     importPgn,
     retry: () => {
+      generation.current++;
+      setReviewVersion((v) => v + 1);
       setWorking(false);
       setEngineVersion((v) => v + 1);
     },

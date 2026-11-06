@@ -2,9 +2,9 @@
 
 ## Stockfish
 
-Pin: stockfish npm package **19.0.1**, `stockfish-19-lite-single.js` with its matching WASM. Both are copied without modification from the installed package. The small single-thread build avoids SharedArrayBuffer and cross-origin isolation requirements. It runs in a dedicated Worker, communicates over UCI, and keeps expensive searches off the UI thread.
+Pin: stockfish npm package **19.0.1**, `stockfish-19-lite-single.js` with its matching WASM. Both are copied without modification from the installed package. The small single-thread build avoids SharedArrayBuffer and cross-origin isolation requirements. Two independent Worker instances communicate over UCI: one serves bot moves/hints and one serves review. Both keep expensive searches off the UI thread.
 
-One queue owns worker commands. Initialization requires `uciok` and `readyok`. Searches have explicit time/depth limits and a failure timeout; runtime worker errors terminate pending requests and expose retry UI. Evaluations normalize to White’s perspective, including mate scores. Analysis and bot searches reset Skill Level and MultiPV each time.
+Each worker owns its own serialized command queue. Initialization requires `uciok` and `readyok`. Searches have explicit time/depth limits and a failure timeout; runtime worker errors terminate pending requests and expose retry UI. Evaluations normalize to White’s perspective, including mate scores. Analysis and bot searches reset Skill Level and MultiPV each time.
 
 ## Difficulty
 
@@ -30,4 +30,4 @@ Move explanations combine quality, legality-backed tactical observations (check,
 
 ## Persistence and portability
 
-PGN preserves actual game history. Save after each analyzed ply; if the page closes during a bot search, resume and make the bot’s missing reply. Completed and imported games remain reviewable. Browser-local storage has no account, cloud synchronization or cross-device backup. Export PGN for a portable copy.
+PGN preserves actual game history. Every legal move is applied and saved synchronously, before any engine search. Review records form a validated prefix of that history and fill in asynchronously. A failed review never undoes an accepted move. If the page closes mid-review, resume analysis from the first missing record; if a bot reply is missing, the gameplay worker supplies it independently. Completed games with pending review also recover. Session generation guards discard results after undo, reload or a new game. Completed and imported games remain reviewable. Browser-local storage has no account, cloud synchronization or cross-device backup. Export PGN for a portable copy.

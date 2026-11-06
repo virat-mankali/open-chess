@@ -1065,6 +1065,7 @@ main {
 }
 .button.primary:hover:not(:disabled) {
   background: var(--button-green-hover);
+  filter: none;
   transform: translateY(-1px);
 }
 .button.secondary {

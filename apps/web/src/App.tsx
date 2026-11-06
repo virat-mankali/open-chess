@@ -224,6 +224,7 @@ export default function App() {
       <aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}>
         <a
           className="brand"
+          aria-label="OpenChess home"
           href="#"
           onClick={(e) => {
             e.preventDefault();
@@ -262,11 +263,11 @@ export default function App() {
           </button>
         </div>
         <div className="sidebar-bottom">
-          <button className="nav-item" onClick={() => setModal('settings')}>
+          <button className="nav-item" aria-label="Settings" onClick={() => setModal('settings')}>
             <Settings2 size={19} />
             <span>Settings</span>
           </button>
-          <button className="nav-item" onClick={() => setModal('guide')}>
+          <button className="nav-item" aria-label="How it works" onClick={() => setModal('guide')}>
             <CircleHelp size={19} />
             <span>How it works</span>
           </button>

@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Chess, EXERCISES, LESSONS, type Exercise, type Square } from '@open-chess/chess-core';
+import { playChessSound } from '../audio/chessAudio';
 import { Board } from './Board';
 import type { Preferences } from '../storage/local';
 
@@ -35,11 +36,15 @@ function ExerciseBoard({
       return;
     }
     if (from + to + (move.promotion || '') === exercise.solution) {
+      playChessSound('finish', preferences.sound, preferences.soundVolume);
       setFen(game.fen());
       setSolved(true);
       setMessage(exercise.explanation);
       onComplete();
-    } else setMessage('Not quite. Look for a move that matches the goal, and try again.');
+    } else {
+      playChessSound('retry', preferences.sound, preferences.soundVolume);
+      setMessage('Not quite. Look for a move that matches the goal, and try again.');
+    }
   }
   return (
     <div className="training-workspace">

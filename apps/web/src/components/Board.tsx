@@ -10,6 +10,7 @@ import {
 } from '@open-chess/chess-core';
 import { Piece } from './Artwork';
 import { QualityBadge } from './QualityBadge';
+import { usePieceMotion } from './usePieceMotion';
 import { BoardAnnotations } from './BoardAnnotations';
 import type { Preferences } from '../storage/local';
 
@@ -51,10 +52,14 @@ export function Board({
   const boardRef = useRef<HTMLDivElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<Drag | null>(null);
+  const droppedMove = useRef<string | null>(null);
+  usePieceMotion(boardRef, fen, orientation, droppedMove);
+  const [hoverSquare, setHoverSquare] = useState<Square | null>(null);
   const suppressClick = useRef(false);
   const [drag, setDrag] = useState<Drag | null>(null);
   function cancelDrag() {
     dragRef.current = null;
+    setHoverSquare(null);
     setDrag(null);
   }
   useEffect(() => {
@@ -134,6 +139,12 @@ export function Board({
       setSelected(candidate.from);
       setDrag({ ...candidate, x: e.clientX, y: e.clientY });
     }
+    const rect = boardRef.current!.getBoundingClientRect();
+    const col = Math.floor(((e.clientX - rect.left) / rect.width) * 8);
+    const row = Math.floor(((e.clientY - rect.top) / rect.height) * 8);
+    const hover =
+      col >= 0 && col < 8 && row >= 0 && row < 8 ? ((files[col] + ranks[row]) as Square) : null;
+    setHoverSquare((old) => (old === hover ? old : hover));
     // Moving a single fixed overlay avoids rerendering 64 squares at pointer speed.
     if (ghostRef.current)
       ghostRef.current.style.transform = `translate3d(${e.clientX - candidate.size / 2}px, ${e.clientY - candidate.size / 2}px, 0)`;
@@ -152,7 +163,10 @@ export function Board({
     const row = Math.floor(((e.clientY - rect.top) / rect.height) * 8);
     if (col < 0 || col > 7 || row < 0 || row > 7) return;
     const to = (files[col] + ranks[row]) as Square;
-    if (to !== candidate.from) submit(candidate.from, to);
+    if (to !== candidate.from) {
+      droppedMove.current = candidate.from + to;
+      submit(candidate.from, to);
+    }
   }
   const checkedKing = game.isCheck()
     ? game
@@ -189,7 +203,8 @@ export function Board({
             return (
               <button
                 key={square}
-                className={`square ${light ? 'light' : 'dark'} ${currentSelected === square ? 'selected' : ''} ${recent ? 'last-move' : ''} ${suggested ? 'hinted' : ''} ${checkedKing === square ? 'checked' : ''}`}
+                data-square={square}
+                className={`square ${light ? 'light' : 'dark'} ${currentSelected === square ? 'selected' : ''} ${recent ? 'last-move' : ''} ${suggested ? 'hinted' : ''} ${hoverSquare === square && target ? 'drop-ready' : ''} ${checkedKing === square ? 'checked' : ''}`}
                 aria-label={`${square}${piece ? ` ${piece.color === 'w' ? 'white' : 'black'} ${{ p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' }[piece.type]}` : ''}`}
                 aria-disabled={disabled}
                 onClick={(e) => {

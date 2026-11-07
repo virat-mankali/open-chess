@@ -11,19 +11,21 @@ export type SavedGame = {
   mode: 'coach' | 'challenge';
 };
 export type Preferences = {
-  appearanceVersion: 3;
+  appearanceVersion: 4;
   sound: boolean;
+  soundVolume: number;
   targets: boolean;
   coordinates: boolean;
-  theme: 'linen' | 'green' | 'walnut' | 'slate';
+  theme: 'studio' | 'linen' | 'green' | 'walnut' | 'slate';
   pieces: 'sculpted' | 'classic';
 };
 export const defaults: Preferences = {
-  appearanceVersion: 3,
+  appearanceVersion: 4,
   sound: true,
+  soundVolume: 65,
   targets: true,
   coordinates: true,
-  theme: 'linen',
+  theme: 'studio',
   pieces: 'sculpted',
 };
 let cachedRaw: string | null = null;
@@ -45,18 +47,28 @@ export function write(key: string, value: unknown) {
   }
 }
 export function preferences(): Preferences {
-  const v = read<Partial<Preferences>>('preferences', {});
+  const v = read<Partial<Omit<Preferences, 'appearanceVersion'>> & { appearanceVersion?: number }>(
+    'preferences',
+    {},
+  );
   return {
-    appearanceVersion: 3,
+    appearanceVersion: 4,
     sound: typeof v?.sound === 'boolean' ? v.sound : true,
+    soundVolume:
+      typeof v?.soundVolume === 'number' && Number.isFinite(v.soundVolume)
+        ? Math.max(0, Math.min(100, v.soundVolume))
+        : 65,
     targets: typeof v?.targets === 'boolean' ? v.targets : true,
     coordinates: typeof v?.coordinates === 'boolean' ? v.coordinates : true,
-    // Adopt the reference board once; later explicit board/piece selections persist.
+    // Adopt Studio for the previous default; keep other saved palettes and piece choices.
     theme:
-      v?.appearanceVersion === 3 && ['linen', 'green', 'walnut', 'slate'].includes(v.theme || '')
-        ? v.theme!
-        : 'linen',
-    pieces: v?.appearanceVersion === 3 && v.pieces === 'classic' ? 'classic' : 'sculpted',
+      (v?.appearanceVersion === 4 || v?.appearanceVersion === 3) &&
+      ['studio', 'linen', 'green', 'walnut', 'slate'].includes(v.theme || '')
+        ? v.appearanceVersion === 3 && v.theme === 'linen'
+          ? 'studio'
+          : v.theme!
+        : 'studio',
+    pieces: v?.pieces === 'classic' ? 'classic' : 'sculpted',
   };
 }
 export function savedGames(): SavedGame[] {

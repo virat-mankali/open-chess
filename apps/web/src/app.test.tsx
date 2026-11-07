@@ -231,10 +231,11 @@ describe('board and persistence edge cases', () => {
     const storedGames = localStorage.getItem('openchess.v1.games');
     write('preferences', { theme: 'walnut', sound: false, targets: false, coordinates: false });
     expect(preferences()).toEqual({
-      appearanceVersion: 3,
-      theme: 'linen',
+      appearanceVersion: 4,
+      theme: 'studio',
       pieces: 'sculpted',
       sound: false,
+      soundVolume: 65,
       targets: false,
       coordinates: false,
     });

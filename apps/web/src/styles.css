@@ -3297,3 +3297,126 @@ dialog::backdrop {
   color: var(--muted);
   margin-top: 8px;
 }
+
+/* Studio board: quiet matte squares and clear, tactile interaction states. */
+.theme-studio {
+  --board-light: #f0dfc4;
+  --board-dark: #b88d68;
+  --board-label-light: #faecd6;
+  --board-label-dark: #815b3f;
+}
+.board-frame.theme-studio {
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px #ebd5b21a,
+    0 8px 24px #0002;
+}
+.theme-studio .board {
+  border-radius: 8px;
+}
+.theme-studio .square.last-move.light {
+  background: #dfd28d;
+}
+.theme-studio .square.last-move.dark {
+  background: #b9b16d;
+}
+.theme-studio .square.selected {
+  background: #e4c97b;
+}
+.theme-studio .square.hinted {
+  background: #c1ccb0 !important;
+  box-shadow: inset 0 0 0 3px #71966c !important;
+}
+.theme-studio .square.checked {
+  background: radial-gradient(ellipse, #dc7762 0%, #dc7762aa 55%, #b88d68 100%);
+}
+.theme-studio .rank-label,
+.theme-studio .file-label {
+  font-size: clamp(11px, 1.1vw, 15px);
+}
+.theme-studio .rank-label {
+  top: 6px;
+  left: 6px;
+}
+.theme-studio .file-label {
+  right: 6px;
+  bottom: 5px;
+}
+.theme-studio .chess-piece {
+  width: 94%;
+  height: 94%;
+}
+.square.drop-ready {
+  box-shadow: inset 0 0 0 4px #fff9 !important;
+}
+.square.piece-in-motion {
+  z-index: 4;
+}
+.move-target {
+  width: 23%;
+  height: 23%;
+  background: #27271e30;
+  box-shadow: inset 0 0 0 1px #ffffff12;
+}
+.capture-target {
+  inset: 4%;
+  border-width: 5px;
+  border-color: #27271e55;
+}
+.theme-options {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.theme-option {
+  min-width: 0;
+}
+.sound-settings {
+  padding: 18px 0 4px;
+}
+.sound-settings > label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+}
+.sound-settings > label span {
+  color: var(--subtle);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.sound-settings > div {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 14px;
+}
+.sound-settings input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.sound-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 11px;
+  background: var(--surface-raised);
+  border-radius: 6px;
+  font-size: 11px;
+}
+.sound-preview:disabled {
+  opacity: 0.4;
+}
+@media (max-width: 600px) {
+  .theme-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .theme-studio .rank-label {
+    top: 3px;
+    left: 3px;
+  }
+  .theme-studio .file-label {
+    right: 3px;
+    bottom: 3px;
+  }
+}

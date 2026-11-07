@@ -47,6 +47,12 @@ import { QualityBadge } from './components/QualityBadge';
 import { QualityGuide, ReviewPanel } from './components/ReviewPanel';
 import { Training } from './components/Training';
 import { preferences, progress, savedGames, write, type SavedGame } from './storage/local';
+import {
+  playChessSound,
+  silenceChessAudio,
+  soundForMove,
+  unlockChessAudio,
+} from './audio/chessAudio';
 import { useChessGame } from './useChessGame';
 
 type Page = 'play' | 'learn' | 'puzzles' | 'review' | 'library';
@@ -93,26 +99,6 @@ function downloadPgn(pgn: string) {
   a.download = `openchess-${new Date().toISOString().slice(0, 10)}.pgn`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-function moveSound() {
-  try {
-    const Audio = window.AudioContext;
-    const context = new Audio();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(440, context.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(180, context.currentTime + 0.07);
-    gain.gain.setValueAtTime(0.06, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.09);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.1);
-    oscillator.onended = () => void context.close();
-  } catch {
-    /* Sound is optional when the browser blocks audio. */
-  }
 }
 export default function App() {
   const [page, setPage] = useState<Page>('play');
@@ -196,6 +182,7 @@ export default function App() {
         ? idea!.arrows
         : [];
   function selectPosition(ply: number | null) {
+    if (ply !== cursor) playChessSound('review', prefs.sound, prefs.soundVolume);
     setReviewOverlay(null);
     setCursor(ply);
   }
@@ -204,11 +191,26 @@ export default function App() {
   const evaluationRecord = showingBest ? session.records[coachPly - 2] : currentRecord;
   const score = evaluationRecord?.cp ?? 0;
   const latestPlayerRecord = [...session.records].reverse().find((r) => r.color === session.color);
-  const prevCount = useRef(moves.length);
+  const soundPosition = useRef({ id: session.id, count: moves.length, fen: game.fen() });
   useEffect(() => {
-    if (moves.length > prevCount.current && prefs.sound) moveSound();
-    prevCount.current = moves.length;
-  }, [moves.length, prefs.sound]);
+    const previous = soundPosition.current;
+    const latest = moves.at(-1);
+    if (
+      session.id === previous.id &&
+      moves.length === previous.count + 1 &&
+      latest?.before === previous.fen
+    ) {
+      playChessSound(
+        game.isGameOver() ? 'finish' : soundForMove(latest),
+        prefs.sound,
+        prefs.soundVolume,
+      );
+    }
+    soundPosition.current = { id: session.id, count: moves.length, fen: game.fen() };
+  }, [session.id, session.pgn, prefs.sound, prefs.soundVolume]);
+  useEffect(() => {
+    if (!prefs.sound || prefs.soundVolume === 0) silenceChessAudio();
+  }, [prefs.sound, prefs.soundVolume]);
   useEffect(() => {
     write('preferences', prefs);
   }, [prefs]);
@@ -222,18 +224,20 @@ export default function App() {
         return;
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
+        if (selectedPly > 0) playChessSound('review', prefs.sound, prefs.soundVolume);
         setReviewOverlay(null);
         setCursor((c) => Math.max(0, (c ?? moves.length) - 1));
       }
       if (e.key === 'ArrowRight') {
         e.preventDefault();
+        if (selectedPly < moves.length) playChessSound('review', prefs.sound, prefs.soundVolume);
         setReviewOverlay(null);
         setCursor((c) => (c === null ? null : Math.min(moves.length, c + 1)));
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [modal, page, moves.length]);
+  }, [modal, page, moves.length, selectedPly, prefs.sound, prefs.soundVolume]);
   function navigate(next: Page) {
     setPage(next);
     setMobileNav(false);
@@ -280,7 +284,15 @@ export default function App() {
     { id: 'library' as Page, label: 'My games', icon: FolderHeart },
   ];
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      onPointerDownCapture={() => {
+        if (prefs.sound) unlockChessAudio();
+      }}
+      onKeyDownCapture={() => {
+        if (prefs.sound) unlockChessAudio();
+      }}
+    >
       <aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}>
         <a
           className="brand"
@@ -1031,10 +1043,10 @@ export default function App() {
             <div className="settings-content">
               <h3>Board style</h3>
               <p className="setting-description">
-                Choose the textured reference board or a classic color palette.
+                A calm Studio board, textured linen, or your favorite classic palette.
               </p>
               <div className="theme-options">
-                {(['linen', 'green', 'walnut', 'slate'] as const).map((theme) => (
+                {(['studio', 'linen', 'green', 'walnut', 'slate'] as const).map((theme) => (
                   <button
                     key={theme}
                     aria-pressed={prefs.theme === theme}
@@ -1069,7 +1081,9 @@ export default function App() {
                     </span>
                     <b>{pieces === 'sculpted' ? 'Sculpted' : 'Classic'}</b>
                     <small>
-                      {pieces === 'sculpted' ? 'From your reference' : 'Traditional outlines'}
+                      {pieces === 'sculpted'
+                        ? 'Soft shading & bold silhouettes'
+                        : 'Traditional outlines'}
                     </small>
                     {prefs.pieces === pieces && <Check size={16} />}
                   </button>
@@ -1080,7 +1094,7 @@ export default function App() {
                   {
                     key: 'sound',
                     title: 'Move sounds',
-                    description: 'A small sound for each move.',
+                    description: 'Distinct cues for moves, captures, checks, and game endings.',
                   },
                   {
                     key: 'targets',
@@ -1106,6 +1120,35 @@ export default function App() {
                   />
                 </label>
               ))}
+              <div className="sound-settings">
+                <label htmlFor="sound-volume">
+                  Volume <span>{prefs.soundVolume}%</span>
+                </label>
+                <div>
+                  <input
+                    id="sound-volume"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    disabled={!prefs.sound}
+                    value={prefs.soundVolume}
+                    onChange={(e) =>
+                      setPrefs((p) => ({ ...p, soundVolume: Number(e.target.value) }))
+                    }
+                  />
+                  <button
+                    className="sound-preview"
+                    disabled={!prefs.sound || !prefs.soundVolume}
+                    onClick={() => {
+                      unlockChessAudio();
+                      playChessSound('capture', prefs.sound, prefs.soundVolume);
+                    }}
+                  >
+                    <Volume2 size={15} /> Test sound
+                  </button>
+                </div>
+              </div>
               <p className="settings-note">
                 <ShieldCheck size={16} />
                 Your preferences and games stay in this browser.

@@ -109,3 +109,39 @@ describe('pointer-following chess pieces', () => {
     expect(onMove).toHaveBeenCalledExactlyOnceWith('a7', 'a8', 'r');
   });
 });
+
+describe('piece motion', () => {
+  it('slides both king and rook for castling and respects reduced motion', () => {
+    const game = new Chess('4k3/8/8/8/8/8/8/4K2R w K - 0 1');
+    const animation = { cancel: vi.fn(), onfinish: null, oncancel: null };
+    const animate = vi.fn(() => animation);
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value: animate });
+    const { rerender } = setup('w', game.fen());
+    game.move('O-O');
+    rerender(
+      <Board
+        fen={game.fen()}
+        orientation="w"
+        disabled={false}
+        onMove={vi.fn()}
+        preferences={defaults}
+      />,
+    );
+    expect(animate).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'g1 white king' })).toBeTruthy();
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    game.undo();
+    rerender(
+      <Board
+        fen={game.fen()}
+        orientation="w"
+        disabled={false}
+        onMove={vi.fn()}
+        preferences={defaults}
+      />,
+    );
+    expect(animate).toHaveBeenCalledTimes(2);
+    delete (HTMLElement.prototype as unknown as { animate?: unknown }).animate;
+  });
+});

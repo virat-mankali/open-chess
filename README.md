@@ -61,6 +61,8 @@ Add a future standalone backend as `apps/api`, and shared API contracts as `pack
 - Four board styles (textured linen, green, walnut, slate), independent Sculpted/Classic SVG piece styles, sound controls, coordinates, legal-move guides, keyboard selection, pointer-following drag/drop, and responsive layouts.
 - Immediate legal moves and autosaves; independent gameplay and review workers keep analysis off the interaction path.
 - Paired player accuracy, move-quality breakdown, readable shared badges and a live coach focused on your latest move.
+- A conversational game review with an original SVG coach, a colored evaluation timeline, playback, and an engine-best-move preview that preserves your PGN.
+- Position-based fork ideas with gold SVG arrows (including L-shaped knight paths). Future plans are explicitly conditional on the opponent's reply; they are not engine scores or promises of winning material.
 
 ## Scope and limits
 

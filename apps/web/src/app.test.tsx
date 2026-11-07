@@ -101,9 +101,12 @@ describe('F01–F03 game and coach flows', () => {
     expect((screen.getByRole('button', { name: 'Take back' }) as HTMLButtonElement).disabled).toBe(
       true,
     );
+    expect(screen.queryByRole('button', { name: 'Explain' })).toBeNull();
+    expect(document.querySelector('.board-annotations')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Resign game' }));
     fireEvent.click(screen.getByRole('button', { name: 'Resign & review' }));
     expect(savedGames()[0].result).toContain('resignation');
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     expect(screen.getByText('Your accuracy')).toBeTruthy();
   });
   it('reviews an earlier move without changing the actual game', async () => {
@@ -184,6 +187,32 @@ describe('F04–F06 learning, settings and import', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Analyze game' }));
     await waitFor(() => expect(savedGames()[0]?.records).toHaveLength(4));
     expect(screen.getByRole('heading', { name: 'Game Review' })).toBeTruthy();
+  });
+  it('shows a real fork plan, previews the engine choice, and keeps PGN history unchanged', async () => {
+    await setup();
+    fireEvent.click(screen.getByRole('button', { name: 'My games' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import PGN' }));
+    fireEvent.change(screen.getByLabelText('Game notation'), {
+      target: { value: '1. e4 e5 2. Qh5 Nc6' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Analyze game' }));
+    await waitFor(() => expect(savedGames()[0]?.records).toHaveLength(4));
+    expect(screen.getByText(/Develop your knight from g8 to f6/)).toBeTruthy();
+    expect(
+      screen.getByRole('img', { name: 'Move idea: g8 to f6, f6 to h5, f6 to e4' }),
+    ).toBeTruthy();
+    const pgn = savedGames()[0].pgn;
+    fireEvent.click(screen.getByRole('button', { name: 'Best' }));
+    expect(screen.getByRole('button', { name: 'b8 black knight' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'c6 black knight' })).toBeNull();
+    expect(savedGames()[0].pgn).toBe(pgn);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to played move' }));
+    expect(screen.getByRole('button', { name: 'c6 black knight' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous move' }));
+    expect(
+      screen.queryByRole('img', { name: 'Move idea: g8 to f6, f6 to h5, f6 to e4' }),
+    ).toBeNull();
+    expect(savedGames()[0].pgn).toBe(pgn);
   });
   it('rejects corrupt PGN with an actionable message', async () => {
     await setup();

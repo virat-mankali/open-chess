@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -32,7 +32,15 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
-import { BOTS, Chess, QUALITIES, openingName, type Color } from '@open-chess/chess-core';
+import {
+  BOTS,
+  Chess,
+  QUALITIES,
+  openingName,
+  reviewIdea,
+  type Color,
+  type ReviewArrow,
+} from '@open-chess/chess-core';
 import { Board } from './components/Board';
 import { Avatar, Piece } from './components/Artwork';
 import { QualityBadge } from './components/QualityBadge';
@@ -126,6 +134,10 @@ export default function App() {
   const [mode, setMode] = useState<'coach' | 'challenge'>('coach');
   const [flipped, setFlipped] = useState(false);
   const [cursor, setCursor] = useState<number | null>(null);
+  const [reviewOverlay, setReviewOverlay] = useState<{
+    key: string;
+    mode: 'best' | 'hidden';
+  } | null>(null);
   const [tab, setTab] = useState<'opponent' | 'review'>('opponent');
   const [modal, setModal] = useState<Modal>(null);
   const [mobileNav, setMobileNav] = useState(false);
@@ -138,12 +150,59 @@ export default function App() {
   const currentRecord = session.records[selectedPly - 1];
   const selectedMove = moves[selectedPly - 1];
   const initialFen = moves[0]?.before || new Chess().fen();
-  const boardFen =
+  const positionFen =
     cursor === null ? game.fen() : cursor === 0 ? initialFen : selectedMove?.after || game.fen();
+  const coachPly =
+    cursor === null && session.active
+      ? moves.reduce((last, move, index) => (move.color === session.color ? index + 1 : last), 0) ||
+        selectedPly
+      : selectedPly;
+  const coachMove = moves[coachPly - 1];
+  const coachRecord = session.records[coachPly - 1];
+  const showAnalysis = session.mode === 'coach' || !session.active;
+  const idea = useMemo(
+    () =>
+      coachMove && coachRecord && showAnalysis && tab === 'review' ? reviewIdea(coachMove) : null,
+    [coachMove?.after, coachMove?.before, coachRecord, showAnalysis, tab],
+  );
+  const overlayKey = `${session.id}:${coachMove?.after}`;
+  const bestMove = useMemo(() => {
+    if (!coachRecord) return null;
+    try {
+      return new Chess(coachRecord.before).move(coachRecord.bestSan);
+    } catch {
+      return null;
+    }
+  }, [coachRecord]);
+  const showingBest =
+    showAnalysis &&
+    tab === 'review' &&
+    reviewOverlay?.key === overlayKey &&
+    reviewOverlay.mode === 'best' &&
+    !!bestMove;
+  const showingIdea =
+    showAnalysis &&
+    tab === 'review' &&
+    !!coachRecord &&
+    !!idea &&
+    positionFen === coachMove?.after &&
+    !showingBest &&
+    !(reviewOverlay?.key === overlayKey && reviewOverlay.mode === 'hidden');
+  const boardFen = showingBest ? coachRecord!.before : positionFen;
+  const reviewArrows: ReviewArrow[] =
+    showingBest && bestMove
+      ? [{ from: bestMove.from, to: bestMove.to, kind: 'move' }]
+      : showingIdea
+        ? idea!.arrows
+        : [];
+  function selectPosition(ply: number | null) {
+    setReviewOverlay(null);
+    setCursor(ply);
+  }
   const orientation: Color = flipped ? (session.color === 'w' ? 'b' : 'w') : session.color;
   const currentMove = selectedMove ? { from: selectedMove.from, to: selectedMove.to } : undefined;
-  const showAnalysis = session.mode === 'coach' || !session.active;
-  const score = currentRecord?.cp ?? 0;
+  const evaluationRecord = showingBest ? session.records[coachPly - 2] : currentRecord;
+  const score = evaluationRecord?.cp ?? 0;
   const latestPlayerRecord = [...session.records].reverse().find((r) => r.color === session.color);
   const prevCount = useRef(moves.length);
   useEffect(() => {
@@ -163,10 +222,12 @@ export default function App() {
         return;
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
+        setReviewOverlay(null);
         setCursor((c) => Math.max(0, (c ?? moves.length) - 1));
       }
       if (e.key === 'ArrowRight') {
         e.preventDefault();
+        setReviewOverlay(null);
         setCursor((c) => (c === null ? null : Math.min(moves.length, c + 1)));
       }
     };
@@ -319,7 +380,7 @@ export default function App() {
         <main>
           {(page === 'play' || page === 'review') && (
             <>
-              <div className="game-layout">
+              <div className={`game-layout ${tab === 'review' ? 'review-layout' : ''}`}>
                 <section className="board-column" aria-label="Chess game">
                   <div className="player-strip">
                     <div className="player-identity">
@@ -358,17 +419,20 @@ export default function App() {
                       <div
                         className="evaluation-bar"
                         aria-label={
-                          currentRecord
+                          evaluationRecord
                             ? `Evaluation ${Math.abs(score) >= 9000 ? 'mate' : (score / 100).toFixed(1)} pawns for White`
                             : 'Evaluation pending'
                         }
                       >
                         <div
                           className="eval-white"
-                          style={{ height: `${Math.max(4, Math.min(96, 50 + score / 12))}%` }}
+                          style={{
+                            height: `${Math.max(4, Math.min(96, 50 + score / 12))}%`,
+                            ...(orientation === 'b' ? { top: 0, bottom: 'auto' } : {}),
+                          }}
                         />
                         <span>
-                          {!currentRecord
+                          {!evaluationRecord
                             ? '—'
                             : Math.abs(score) >= 9000
                               ? 'M'
@@ -384,13 +448,16 @@ export default function App() {
                         chess.busy ||
                         !session.active ||
                         cursor !== null ||
+                        showingBest ||
                         chess.engineState !== 'ready' ||
                         game.turn() !== session.color
                       }
                       onMove={(from, to, promotion) => void chess.move(from, to, promotion)}
                       preferences={prefs}
-                      lastMove={currentMove}
-                      hint={chess.hint}
+                      lastMove={showingBest ? undefined : currentMove}
+                      hint={showingBest || cursor !== null ? null : chess.hint}
+                      arrows={reviewArrows}
+                      ideaTargets={showingIdea ? idea!.targets : []}
                       quality={
                         showAnalysis && currentRecord?.after === boardFen
                           ? currentRecord
@@ -398,7 +465,30 @@ export default function App() {
                       }
                     />
                   </div>
-                  {showAnalysis && selectedMove && (
+                  {showingBest && bestMove && (
+                    <div className="board-idea-legend best-preview" role="status">
+                      <Sparkles size={16} />
+                      <span>
+                        Before {coachMove.san} · best move <b>{bestMove.san}</b>
+                      </span>
+                      <button onClick={() => setReviewOverlay(null)}>Back to played move</button>
+                    </div>
+                  )}
+                  {showingIdea && idea && (
+                    <div className="board-idea-legend">
+                      <span className="idea-dot" />
+                      <span>
+                        {idea.timing === 'plan'
+                          ? 'Possible next-move idea'
+                          : 'Two targets under attack'}{' '}
+                        · <b>{idea.san}</b>
+                      </span>
+                      <button onClick={() => setReviewOverlay({ key: overlayKey, mode: 'hidden' })}>
+                        Hide arrows
+                      </button>
+                    </div>
+                  )}
+                  {showAnalysis && selectedMove && !showingBest && (
                     <div className="board-review-caption" aria-live="polite">
                       {currentRecord ? (
                         <>
@@ -519,7 +609,7 @@ export default function App() {
                     </div>
                   </div>
                   {cursor !== null && (
-                    <button className="return-live" onClick={() => setCursor(null)}>
+                    <button className="return-live" onClick={() => selectPosition(null)}>
                       <ArrowLeft size={16} />
                       Return to the current position
                     </button>
@@ -573,7 +663,7 @@ export default function App() {
                     </div>
                   )}
                 </section>
-                <aside className="game-panel">
+                <aside className={`game-panel ${tab === 'review' ? 'review-panel' : ''}`}>
                   <div className="game-panel-heading">
                     {tab === 'review' ? <TrendingUp size={28} /> : <Swords size={28} />}
                     <h1>{tab === 'review' ? 'Game Review' : 'Play Computer'}</h1>
@@ -610,7 +700,19 @@ export default function App() {
                       onRetry={chess.retryReview}
                       color={session.color}
                       cursor={cursor}
-                      onSelect={setCursor}
+                      onSelect={selectPosition}
+                      coachPly={coachPly}
+                      idea={idea}
+                      showingBest={showingBest}
+                      showingIdea={showingIdea}
+                      onShowBest={() => {
+                        setCursor(coachPly);
+                        setReviewOverlay(showingBest ? null : { key: overlayKey, mode: 'best' });
+                      }}
+                      onShowIdea={() => {
+                        setCursor(coachPly);
+                        setReviewOverlay(showingIdea ? { key: overlayKey, mode: 'hidden' } : null);
+                      }}
                       onExport={() => downloadPgn(session.pgn)}
                       challenge={session.mode === 'challenge'}
                       finished={!session.active}

@@ -1,31 +1,27 @@
-# Review and board reference — 2026-11-06
+# Review and board reference — updated 2026-11-08
 
-## Evidence and limits
+## Evidence
 
-The user supplied a board screenshot. It shows a textured cream-and-gray board, large coordinate labels, and white/charcoal Staunton pieces with dark outlines, soft interior shading and a single rounded pedestal. This is the visual reference for the new optional board palette and piece set.
+The user supplied two Chess.com game-review screenshots on 2026-11-08. They show a black-oriented cream-and-gray textured board, outlined Staunton pieces, a dark review panel, a coach portrait beside a white speech bubble, Explain / Best / Next actions, a dense two-column move list, an evaluation graph, and five playback controls.
 
-The screenshot does not show the review panel. Attempts to retrieve the following public documentation returned proxy HTTP 403 CONNECT errors in this environment:
+The second screenshot shows 1. e4 e5 2. Qh5 Nc6. Nc6 is marked best, with gold L-shaped arrows illustrating the possible g8–f6 development and attacks on h5 and e4. The new UI uses the existing OpenChess board/piece assets and an original SVG coach illustration.
 
-- https://support.chess.com/en/articles/8584089-how-does-game-review-work
-- https://support.chess.com/en/articles/8572705-how-are-moves-classified-what-is-a-blunder-or-brilliant-etc
-- https://support.chess.com/en/articles/8614091-how-can-i-play-against-the-chess-com-bots
+## Implemented review behavior
 
-No supported interactive browser or general web-search tool was exposed. No current Chess.com panel screenshot was inspected, and exact pixel/layout parity is not verified. No alternative browser was installed.
+- Move-by-move review leads with the coach bubble. Player accuracy and quality counts live in Overview.
+- Existing Stockfish evaluations determine grades and the best move. Pending moves remain ungraded, and analysis errors retain the retry flow.
+- Fork ideas are computed from the selected position, for either color. Legal-move checks exclude pins; prospective forks that immediately lose the attacking piece to a profitable exchange are omitted.
+- A plan after a move is explicitly conditional: the opponent moves first and can prevent it. The motif detector is not an engine evaluation or a forced-win detector.
+- Gold SVG movement and attack arrows follow board orientation; knight arrows use an L path. Users can hide or restore them.
+- Best previews the original position and the engine's preferred move without modifying PGN or entering a move. Returning, selecting another move, or navigating history restores the played position.
+- The evaluation timeline, move table, first/previous/play/next/last controls, and keyboard navigation share the review cursor.
+- Challenge mode hides explanations, grades, graphs, and tactical arrows until the game ends.
 
-## Proposed review structure
+## Validation
 
-These are implementation recommendations for a familiar chess review experience, not newly observed measurements of Chess.com's current UI:
+The exact Nc6 example was imported and analyzed with the browser's real Stockfish worker. Desktop and mobile browser checks cover arrows, board flipping, explanation, best-move preview, unchanged storage, navigation, and playback. Domain regression tests cover both colors, actual versus prospective forks, missing targets, pins, unsafe knight moves, checks, and checkmate.
 
-1. Compact Review header and distinct summary/move-review navigation.
-2. White and Black player identities side by side, each with a prominent computed accuracy value; show a dash before analysis exists.
-3. A compact, clickable evaluation timeline underneath the player summary.
-4. A move-quality breakdown with a centered icon and full category label, and aligned counts for each player.
-5. A selected-move card with move number/SAN, a large named quality badge, explanation, evaluation and best continuation.
-6. A dense two-column move list (White/Black), visible selection and first/previous/next/last controls.
-
-Show analysis-in-progress explicitly. A pending move must appear in history immediately without a fabricated quality or accuracy. Challenge mode continues to hide assistance until completion.
-
-## Proposed quality conventions
+## Quality conventions
 
 Use a consistent badge component across the board, selected-move card, breakdown and move list:
 

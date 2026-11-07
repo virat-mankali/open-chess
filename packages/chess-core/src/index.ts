@@ -1,6 +1,7 @@
 import { Chess, type Color, type Move, type Square } from 'chess.js';
 export { Chess };
 export type { Color, Move, Square, PieceSymbol } from 'chess.js';
+export { reviewIdea, type ReviewIdea, type ReviewArrow } from './review-ideas';
 
 export type Bot = {
   id: string;

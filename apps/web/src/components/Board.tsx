@@ -6,9 +6,11 @@ import {
   type Square,
   type PieceSymbol,
   type MoveRecord,
+  type ReviewArrow,
 } from '@open-chess/chess-core';
 import { Piece } from './Artwork';
 import { QualityBadge } from './QualityBadge';
+import { BoardAnnotations } from './BoardAnnotations';
 import type { Preferences } from '../storage/local';
 
 type Drag = {
@@ -32,6 +34,8 @@ export function Board({
   lastMove,
   hint,
   quality,
+  arrows = [],
+  ideaTargets = [],
 }: {
   fen: string;
   orientation: Color;
@@ -41,6 +45,8 @@ export function Board({
   lastMove?: { from: string; to: string };
   hint?: string | null;
   quality?: MoveRecord;
+  arrows?: ReviewArrow[];
+  ideaTargets?: Square[];
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
@@ -213,6 +219,7 @@ export function Board({
           }),
         )}
       </div>
+      <BoardAnnotations arrows={arrows} targets={ideaTargets} orientation={orientation} />
       {drag &&
         createPortal(
           <div

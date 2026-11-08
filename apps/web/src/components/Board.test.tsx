@@ -57,6 +57,40 @@ function drag(
   fireEvent.pointerDown(from, { pointerId: 7, button: 0, clientX: start[0], clientY: start[1] });
   fireEvent.pointerMove(board, { pointerId: 7, clientX: end[0], clientY: end[1] });
 }
+describe('piece selection', () => {
+  it('shows legal knight destinations, and clicking the same piece again clears them', () => {
+    const { onMove } = setup();
+    const knight = screen.getByRole('button', { name: 'g1 white knight' });
+    fireEvent.click(knight);
+    expect(knight.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelectorAll('.move-target')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'f3' }).classList.contains('legal-target')).toBe(
+      true,
+    );
+    expect(screen.getByRole('button', { name: 'g3' }).classList.contains('legal-target')).toBe(
+      false,
+    );
+    fireEvent.click(knight);
+    expect(knight.getAttribute('aria-pressed')).toBe('false');
+    expect(document.querySelectorAll('.move-target, .legal-target, .selected')).toHaveLength(0);
+    expect(onMove).not.toHaveBeenCalled();
+  });
+  it('switches selection, permits a capture, and clears selection on Escape', () => {
+    const { board, onMove } = setup('w', '4k3/8/8/8/8/3p4/4PN2/4K3 w - - 0 1');
+    fireEvent.click(screen.getByRole('button', { name: 'e2 white pawn' }));
+    fireEvent.click(screen.getByRole('button', { name: 'f2 white knight' }));
+    expect(screen.getByRole('button', { name: 'e2 white pawn' }).getAttribute('aria-pressed')).toBe(
+      'false',
+    );
+    const capture = screen.getByRole('button', { name: 'd3 black pawn' });
+    expect(capture.querySelector('.capture-target')).toBeTruthy();
+    fireEvent.keyDown(board, { key: 'Escape' });
+    expect(capture.querySelector('.capture-target')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'f2 white knight' }));
+    fireEvent.click(capture);
+    expect(onMove).toHaveBeenCalledExactlyOnceWith('f2', 'd3');
+  });
+});
 describe('pointer-following chess pieces', () => {
   it('moves a visible piece with the pointer and submits a legal drop once', () => {
     const { board, onMove } = setup();

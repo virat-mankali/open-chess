@@ -30,61 +30,112 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.resetModules();
 });
-it('reuses a single gesture-unlocked audio context, respects mute, and stops active cues', async () => {
-  const sources: { stop: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }[] = [];
-  const param = () => ({
-    setValueAtTime: vi.fn(),
-    linearRampToValueAtTime: vi.fn(),
-    exponentialRampToValueAtTime: vi.fn(),
-  });
+async function setupAudio(decode = () => Promise.resolve({ duration: 0.22 })) {
+  const sources: {
+    stop: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+    start: ReturnType<typeof vi.fn>;
+    playbackRate: { value: number };
+  }[] = [];
+  const gains: { gain: { value: number }; disconnect: ReturnType<typeof vi.fn> }[] = [];
   class Context {
     state = 'running';
     currentTime = 0;
-    sampleRate = 44100;
     destination = {};
+    decodeAudioData = vi.fn(decode);
     createGain() {
-      return { gain: param(), connect: vi.fn(), disconnect: vi.fn() };
-    }
-    createBuffer(_channels: number, length: number) {
-      return { getChannelData: () => new Float32Array(length) };
+      const gain = { gain: { value: 0 }, connect: vi.fn(), disconnect: vi.fn() };
+      gains.push(gain);
+      return gain;
     }
     createBufferSource() {
-      return this.source();
-    }
-    createOscillator() {
-      return { ...this.source(), frequency: param() };
-    }
-    source() {
-      const node = {
+      const source = {
         start: vi.fn(),
         stop: vi.fn(),
-        connect: vi.fn((gain) => gain),
         disconnect: vi.fn(),
+        connect: vi.fn((gain) => gain),
+        playbackRate: { value: 1 },
         onended: null,
       };
-      sources.push(node);
-      return node;
+      sources.push(source);
+      return source;
     }
   }
   const constructor = vi.fn(function () {
     return new Context();
   });
+  const fetchSample = vi.fn(async () => ({
+    ok: true,
+    arrayBuffer: async () => new ArrayBuffer(8),
+  }));
   vi.stubGlobal('AudioContext', constructor);
+  vi.stubGlobal('fetch', fetchSample);
   const audio = await import('./chessAudio');
+  return { audio, constructor, sources, gains, fetchSample };
+}
+
+it('unlocks one context, caches samples, respects volume and mute, and stops active cues', async () => {
+  const { audio, constructor, sources, gains, fetchSample } = await setupAudio();
   audio.playChessSound('move', true, 65);
   expect(constructor).not.toHaveBeenCalled();
   audio.unlockChessAudio();
   audio.unlockChessAudio();
   expect(constructor).toHaveBeenCalledTimes(1);
+  expect(fetchSample).toHaveBeenCalledTimes(3);
   audio.playChessSound('move', false, 65);
   audio.playChessSound('check', true, 0);
+  audio.playChessSound('move', true, NaN);
   expect(sources).toHaveLength(0);
   audio.playChessSound('capture', true, 65);
-  expect(sources.length).toBeGreaterThan(0);
+  await vi.waitFor(() => expect(sources).toHaveLength(1));
+  expect(gains[0].gain.value).toBeCloseTo(0.52);
   audio.silenceChessAudio();
-  expect(
-    sources.every(
-      (node) => node.stop.mock.calls.length === 2 && node.disconnect.mock.calls.length === 1,
-    ),
-  ).toBe(true);
+  expect(sources[0].stop).toHaveBeenCalledOnce();
+  expect(sources[0].disconnect).toHaveBeenCalledOnce();
+  expect(gains[0].disconnect).toHaveBeenCalledOnce();
+  audio.playChessSound('castle', true, 35);
+  await vi.waitFor(() => expect(sources).toHaveLength(3));
+  expect(sources[2].start).toHaveBeenCalledWith(0.1);
+  expect(fetchSample).toHaveBeenCalledTimes(3);
+});
+
+it('does not play a pending decoded sample after muting', async () => {
+  let resolve!: (buffer: { duration: number }) => void;
+  const decoded = new Promise<{ duration: number }>((done) => {
+    resolve = done;
+  });
+  const { audio, sources } = await setupAudio(() => decoded);
+  audio.unlockChessAudio();
+  audio.playChessSound('move', true, 65);
+  audio.silenceChessAudio();
+  resolve({ duration: 0.22 });
+  // Flush fetch, decode and playback promise continuations.
+  await new Promise((done) => setTimeout(done, 0));
+  expect(sources).toHaveLength(0);
+});
+
+it('discards a late sound instead of playing it after the move', async () => {
+  let now = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => now);
+  const { audio, sources } = await setupAudio();
+  audio.unlockChessAudio();
+  audio.playChessSound('move', true, 65);
+  now = 1000;
+  await new Promise((done) => setTimeout(done, 0));
+  expect(sources).toHaveLength(0);
+  vi.restoreAllMocks();
+});
+
+it('quietly handles unavailable sound files', async () => {
+  const { audio, sources } = await setupAudio();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      throw new Error('offline');
+    }),
+  );
+  audio.unlockChessAudio();
+  audio.playChessSound('check', true, 65);
+  await new Promise((done) => setTimeout(done, 0));
+  expect(sources).toHaveLength(0);
 });

@@ -1,0 +1,17 @@
+OpenChess chess sound samples
+
+Author: Enigmahack (https://github.com/Enigmahack)
+License: GNU Affero General Public License, version 3 or later (COPYING.txt).
+
+Unmodified Move.mp3, Capture.mp3 and Check.mp3 from Lichess's sfx sound set,
+renamed to move.mp3, capture.mp3 and check.mp3. No other sound sets are used.
+Source revision: eb880c521ccbf5b7dc573f9f84ff061ba1724ccd
+Source files:
+https://github.com/lichess-org/lila/tree/eb880c521ccbf5b7dc573f9f84ff061ba1724ccd/public/sound/sfx
+Attribution and license declaration:
+https://github.com/lichess-org/lila/blob/eb880c521ccbf5b7dc573f9f84ff061ba1724ccd/COPYING.md
+
+SHA-256:
+0b4bbf4b0bc0cd937f9661820da4f6e9c5b821913a32502d3b571e6730f7c984 move.mp3
+59b9de82710ea30968312902bf7ac8334a1da620ee364e231ef9454f8648f2d2 capture.mp3
+efaa7ae9a88025b6678de680441d806ce55e1a49f9009305235c5cd63a226093 check.mp3

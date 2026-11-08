@@ -392,7 +392,9 @@ export default function App() {
         <main>
           {(page === 'play' || page === 'review') && (
             <>
-              <div className={`game-layout ${tab === 'review' ? 'review-layout' : ''}`}>
+              <div
+                className={`game-layout ${tab === 'review' ? 'review-layout' : ''} ${session.active ? 'match-layout' : ''}`}
+              >
                 <section className="board-column" aria-label="Chess game">
                   <div className="player-strip">
                     <div className="player-identity">
@@ -413,7 +415,9 @@ export default function App() {
                           {chess.busy
                             ? 'Thinking through the position…'
                             : session.active
-                              ? displayBot.style
+                              ? session.color === 'w'
+                                ? 'Playing Black'
+                                : 'Playing White'
                               : 'Your next practice partner'}
                         </span>
                       </div>
@@ -486,7 +490,7 @@ export default function App() {
                       <button onClick={() => setReviewOverlay(null)}>Back to played move</button>
                     </div>
                   )}
-                  {showingIdea && idea && (
+                  {showingIdea && idea && !session.active && (
                     <div className="board-idea-legend">
                       <span className="idea-dot" />
                       <span>
@@ -500,7 +504,7 @@ export default function App() {
                       </button>
                     </div>
                   )}
-                  {showAnalysis && selectedMove && !showingBest && (
+                  {showAnalysis && selectedMove && !showingBest && !session.active && (
                     <div className="board-review-caption" aria-live="polite">
                       {currentRecord ? (
                         <>
@@ -542,10 +546,10 @@ export default function App() {
                               ? 'Reviewing the position'
                               : session.active
                                 ? chess.busy
-                                  ? 'A moment to think ahead'
+                                  ? 'Opponent’s turn'
                                   : game.isCheck()
-                                    ? 'You’re in check — protect your king!'
-                                    : 'Your move. Make it yours.'
+                                    ? 'Check — protect your king'
+                                    : 'Your move'
                                 : 'Ready when you are'}
                         </span>
                       </div>
@@ -638,7 +642,7 @@ export default function App() {
                         <ArrowRight size={16} />
                       </button>
                     </div>
-                  ) : (
+                  ) : !session.active ? (
                     <div className="under-board-note">
                       <span className="note-icon">
                         <BookOpen size={19} />
@@ -652,20 +656,22 @@ export default function App() {
                         </p>
                       </div>
                     </div>
+                  ) : null}
+                  {(!session.active || chess.engineState !== 'ready') && (
+                    <div className="board-footer">
+                      <span>
+                        <span
+                          className={`status-dot ${chess.engineState === 'ready' ? 'ready' : ''}`}
+                        />
+                        {chess.engineState === 'ready'
+                          ? 'Stockfish 19 ready'
+                          : chess.engineState === 'loading'
+                            ? 'Warming up the engine…'
+                            : 'Engine needs attention'}
+                      </span>
+                      <span>Private by design · Saved on this device</span>
+                    </div>
                   )}
-                  <div className="board-footer">
-                    <span>
-                      <span
-                        className={`status-dot ${chess.engineState === 'ready' ? 'ready' : ''}`}
-                      />
-                      {chess.engineState === 'ready'
-                        ? 'Stockfish 19 ready'
-                        : chess.engineState === 'loading'
-                          ? 'Warming up the engine…'
-                          : 'Engine needs attention'}
-                    </span>
-                    <span>Private by design · Saved on this device</span>
-                  </div>
                   {chess.engineState === 'error' && (
                     <div className="engine-error" role="alert">
                       <p>{chess.error}</p>
@@ -731,17 +737,16 @@ export default function App() {
                     />
                   ) : session.active ? (
                     <div className="active-opponent">
-                      <div className="active-bot-portrait">
-                        <Avatar bot={bot} size="xl" />
-                        <span className="online-indicator" />
+                      <div className="match-opponent-identity">
+                        <Avatar bot={bot} size="sm" />
+                        <div>
+                          <h2>
+                            {bot.name}
+                            <span>{session.elo}</span>
+                          </h2>
+                          <p>{bot.style}</p>
+                        </div>
                       </div>
-                      <span className="eyebrow">YOUR OPPONENT</span>
-                      <h2>
-                        {bot.name}
-                        <span>{session.elo}</span>
-                      </h2>
-                      <p className="bot-description">{bot.description}</p>
-                      <div className="bot-speech">“{bot.greeting}”</div>
                       <div className="game-meta">
                         <span>
                           <Infinity size={16} />
@@ -771,21 +776,7 @@ export default function App() {
                           </div>
                           <ChevronRight size={18} />
                         </button>
-                      ) : (
-                        <div className="coach-note">
-                          <Lightbulb size={23} />
-                          <b>
-                            {session.mode === 'coach'
-                              ? 'Your coach is in your corner.'
-                              : 'A challenge, at your level.'}
-                          </b>
-                          <p>
-                            {session.mode === 'coach'
-                              ? 'Try an idea, ask for a hint, or take a move back. This is your space to learn.'
-                              : 'Play with your own ideas. Your move-by-move review unlocks when the game ends.'}
-                          </p>
-                        </div>
-                      )}
+                      ) : null}
                       <button
                         className="button secondary full-width"
                         disabled={chess.busy}

@@ -392,12 +392,6 @@ main {
 .square:hover:not(:disabled) {
   filter: none;
 }
-.square[aria-disabled='false']:hover {
-  box-shadow: inset 0 0 0 3px #fff4;
-}
-.square.selected {
-  background: #f6f669;
-}
 .square.last-move.light {
   background: #f6f669;
 }
@@ -3228,8 +3222,8 @@ dialog::backdrop {
 }
 @media (min-width: 1101px) {
   .game-layout.review-layout {
-    grid-template-columns: minmax(0, min(880px, calc(100svh - 170px))) minmax(380px, 480px);
-    gap: 28px;
+    grid-template-columns: minmax(0, min(880px, calc(100svh - 210px))) minmax(320px, 380px);
+    gap: 24px;
   }
 }
 @media (min-width: 901px) and (max-width: 1100px) {
@@ -3320,9 +3314,6 @@ dialog::backdrop {
 .theme-studio .square.last-move.dark {
   background: #b9b16d;
 }
-.theme-studio .square.selected {
-  background: #e4c97b;
-}
 .theme-studio .square.hinted {
   background: #c1ccb0 !important;
   box-shadow: inset 0 0 0 3px #71966c !important;
@@ -3346,8 +3337,42 @@ dialog::backdrop {
   width: 94%;
   height: 94%;
 }
-.square.drop-ready {
-  box-shadow: inset 0 0 0 4px #fff9 !important;
+.square-corners {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: #40392ddd;
+  stroke-width: 4;
+  stroke-linecap: square;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 100ms ease;
+  z-index: 3;
+}
+.square.selected .square-corners,
+.square.drop-ready .square-corners,
+.square.legal-target:focus-visible .square-corners {
+  opacity: 1;
+}
+@media (hover: hover) {
+  .square.selectable-piece:hover .square-corners {
+    opacity: 0.45;
+  }
+  .square.selected:hover .square-corners,
+  .square.legal-target:hover .square-corners {
+    opacity: 1;
+  }
+  .square.legal-target:hover .move-target {
+    transform: scale(1.08);
+    background: #40392d55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .square-corners {
+    transition: none;
+  }
 }
 .square.piece-in-motion {
   z-index: 4;
@@ -3406,6 +3431,128 @@ dialog::backdrop {
 }
 .sound-preview:disabled {
   opacity: 0.4;
+}
+
+/* During a match, keep the board and move list in focus. */
+@media (min-width: 1101px) {
+  .game-layout.match-layout {
+    grid-template-columns: minmax(0, min(880px, calc(100svh - 210px))) 320px;
+    gap: 24px;
+  }
+}
+@media (min-width: 901px) and (max-width: 1100px) {
+  .game-layout.match-layout {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 20px;
+  }
+}
+.match-layout .game-panel-heading {
+  padding: 14px 16px;
+  gap: 8px;
+}
+.match-layout .game-panel-heading h1 {
+  font-size: 18px;
+}
+.match-layout .game-panel-heading > svg {
+  width: 19px;
+  height: 19px;
+}
+.match-layout .panel-tabs {
+  margin: 0 16px;
+  gap: 16px;
+}
+.match-layout .panel-tabs button {
+  font-size: 11px;
+}
+.match-layout .player-strip {
+  min-height: 48px;
+}
+.match-layout .bottom-player {
+  padding-top: 10px;
+  padding-bottom: 8px;
+}
+.match-layout .active-opponent {
+  padding: 20px 16px;
+}
+.match-opponent-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+.match-opponent-identity h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+.match-opponent-identity p {
+  font-size: 11px;
+  color: var(--subtle);
+}
+.match-layout .game-meta {
+  margin: 18px 0;
+  gap: 14px;
+}
+.review-panel .review-compact .review-view-tabs {
+  margin: 0 16px;
+}
+.review-panel .review-compact .move-coach {
+  padding: 14px 16px 12px;
+}
+.review-compact .coach-bubble {
+  border-radius: 7px;
+  padding: 12px;
+}
+.review-compact .coach-bubble::before {
+  display: none;
+}
+.review-compact .coach-move-meta {
+  margin: 5px 0 0 27px;
+}
+.review-panel .review-compact .coach-move-title h2 {
+  font-size: 14px;
+}
+.review-panel .review-compact .idea-caption {
+  margin-left: 0;
+  margin-top: 10px;
+  gap: 6px;
+  font-size: 10px;
+}
+.review-compact .review-actions {
+  padding: 0 16px;
+  gap: 6px;
+}
+.review-compact .review-action {
+  min-height: 36px;
+  font-size: 11px;
+  gap: 4px;
+}
+.review-panel .review-compact .moves-heading {
+  margin: 12px 16px 3px;
+}
+.review-panel .review-compact .move-table {
+  padding: 0 16px;
+  min-height: 120px;
+  max-height: clamp(160px, 30svh, 340px);
+}
+.review-panel .review-compact .history-controls {
+  padding: 10px 12px;
+  gap: 6px;
+}
+.review-panel .review-compact .history-controls .icon-button {
+  height: 38px;
+}
+.match-evaluation {
+  margin: 10px 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.match-evaluation summary {
+  font-size: 11px;
+  color: var(--subtle);
+  cursor: pointer;
+}
+.match-evaluation .eval-chart {
+  margin: 14px 0 4px;
 }
 @media (max-width: 600px) {
   .theme-options {

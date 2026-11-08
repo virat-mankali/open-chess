@@ -10,111 +10,106 @@ export function soundForMove(move: Move): ChessSound {
   return move.captured ? 'capture' : 'move';
 }
 
+const samples = {
+  move: '/audio/move.mp3',
+  capture: '/audio/capture.mp3',
+  check: '/audio/check.mp3',
+};
+type Sample = keyof typeof samples;
 let context: AudioContext | null = null;
-const active = new Set<AudioScheduledSourceNode>();
+let generation = 0;
+const buffers = new Map<Sample, Promise<AudioBuffer | null>>();
+const active = new Map<AudioBufferSourceNode, GainNode>();
 
-/** Call from a user gesture, so the later computer reply can also make a sound. */
+function loadSample(audio: AudioContext, name: Sample) {
+  let pending = buffers.get(name);
+  if (!pending) {
+    pending = fetch(samples[name])
+      .then((response) => {
+        if (!response.ok) throw new Error('Sound unavailable');
+        return response.arrayBuffer();
+      })
+      .then((data) => audio.decodeAudioData(data))
+      .catch(() => {
+        buffers.delete(name);
+        return null;
+      });
+    buffers.set(name, pending);
+  }
+  return pending;
+}
+
+/** Unlock and preload from a gesture, including for the later computer reply. */
 export function unlockChessAudio() {
   try {
     const Audio = window.AudioContext;
     if (!Audio) return;
     if (!context || context.state === 'closed') context = new Audio();
     if (context.state === 'suspended') void context.resume().catch(() => {});
+    for (const name of Object.keys(samples) as Sample[]) void loadSample(context, name);
   } catch {
     /* Audio is optional on browsers without Web Audio. */
   }
 }
+
 export function silenceChessAudio() {
-  for (const source of active) {
+  generation++;
+  for (const [source, gain] of active) {
     try {
       source.stop();
     } catch {
       /* Already ended. */
     }
     source.disconnect();
+    gain.disconnect();
   }
   active.clear();
 }
 
-/** Original synthesized sounds: a dry wooden tap and quiet tonal cues. No remote samples. */
+/** Short, locally bundled samples; provenance and licenses are in /audio/SOURCE.txt. */
 export function playChessSound(kind: ChessSound, enabled: boolean, volume: number) {
   const audio = context;
   if (!enabled || !Number.isFinite(volume) || volume <= 0 || !audio || audio.state !== 'running')
     return;
-  const level = Math.min(volume, 100) / 100;
-  const now = audio.currentTime;
-  const track = (source: AudioScheduledSourceNode, gain: GainNode) => {
-    active.add(source);
-    source.onended = () => {
-      active.delete(source);
-      source.disconnect();
-      gain.disconnect();
-    };
-  };
-  function tone(
-    frequency: number,
-    delay: number,
-    duration: number,
-    strength: number,
-    end = frequency,
-  ) {
-    const oscillator = audio!.createOscillator();
-    const gain = audio!.createGain();
-    const start = now + delay;
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(frequency, start);
-    oscillator.frequency.exponentialRampToValueAtTime(end, start + duration);
-    gain.gain.setValueAtTime(0, start);
-    gain.gain.linearRampToValueAtTime(strength * level, start + 0.004);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-    oscillator.connect(gain).connect(audio!.destination);
-    track(oscillator, gain);
-    oscillator.start(start);
-    oscillator.stop(start + duration + 0.01);
-  }
-  function tap(delay: number, heavy = false) {
-    const duration = heavy ? 0.075 : 0.045;
-    const buffer = audio!.createBuffer(
-      1,
-      Math.ceil(audio!.sampleRate * duration),
-      audio!.sampleRate,
-    );
-    const samples = buffer.getChannelData(0);
-    // A decaying noise transient gives the tap texture without a long electronic beep.
-    for (let i = 0; i < samples.length; i++)
-      samples[i] = (Math.random() * 2 - 1) * Math.exp(-i / (samples.length / 5));
-    const source = audio!.createBufferSource();
-    const gain = audio!.createGain();
-    source.buffer = buffer;
-    gain.gain.setValueAtTime((heavy ? 0.11 : 0.065) * level, now + delay);
-    source.connect(gain).connect(audio!.destination);
-    track(source, gain);
-    source.start(now + delay);
-    source.stop(now + delay + duration);
-    tone(heavy ? 190 : 330, delay, 0.09, heavy ? 0.16 : 0.1, heavy ? 95 : 145);
-  }
-  try {
-    if (kind === 'review') {
-      tone(480, 0, 0.035, 0.035, 250);
+  const cue = ++generation;
+  const requestedAt = performance.now();
+  const name: Sample =
+    kind === 'capture' || kind === 'promotion'
+      ? 'capture'
+      : kind === 'check' || kind === 'finish'
+        ? 'check'
+        : 'move';
+  void loadSample(audio, name).then((buffer) => {
+    // A slow download must never play an old move or bypass a later mute action.
+    if (
+      !buffer ||
+      cue !== generation ||
+      audio.state !== 'running' ||
+      performance.now() - requestedAt > 250
+    )
       return;
+    const level = Math.min(volume, 100) / 100;
+    const strength = kind === 'review' ? 0.32 : kind === 'retry' ? 0.4 : 0.8;
+    function tap(delay: number, rate = 1) {
+      const source = audio!.createBufferSource();
+      const gain = audio!.createGain();
+      source.buffer = buffer;
+      source.playbackRate.value = rate;
+      gain.gain.value = level * strength;
+      source.connect(gain).connect(audio!.destination);
+      active.set(source, gain);
+      source.onended = () => {
+        if (!active.delete(source)) return;
+        source.disconnect();
+        gain.disconnect();
+      };
+      source.start(audio!.currentTime + delay);
     }
-    if (kind === 'retry') {
-      tone(190, 0, 0.09, 0.065);
-      tone(160, 0.09, 0.1, 0.045);
-      return;
+    try {
+      tap(0, kind === 'retry' ? 0.85 : 1);
+      if (kind === 'castle') tap(0.1, 0.92);
+    } catch {
+      /* A device change or browser audio policy must never interrupt a move. */
     }
-    tap(0, kind === 'capture');
-    if (kind === 'castle') tap(0.09);
-    if (kind === 'check') {
-      tone(740, 0.035, 0.14, 0.055);
-      tone(880, 0.12, 0.18, 0.04);
-    }
-    if (kind === 'promotion' || kind === 'finish') {
-      [523.25, 659.25, 783.99].forEach((frequency, i) =>
-        tone(frequency, 0.06 + i * 0.07, 0.3, 0.045),
-      );
-    }
-  } catch {
-    /* A device change or browser audio policy must never interrupt a move. */
-  }
+  });
 }

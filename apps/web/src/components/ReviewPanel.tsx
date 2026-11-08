@@ -211,7 +211,7 @@ export function ReviewPanel({
       blunder: 'a blunder',
     }[selected.quality];
   return (
-    <div className="review-content">
+    <div className={`review-content ${finished ? '' : 'review-compact'}`}>
       {hidden ? (
         <div className="review-locked">
           <LockKeyhole size={28} />
@@ -311,7 +311,7 @@ export function ReviewPanel({
             <>
               <div className="move-coach" aria-live="polite">
                 <div className="coach-conversation">
-                  <CoachPortrait />
+                  {finished && <CoachPortrait />}
                   <div className="coach-bubble">
                     {selected ? (
                       <>
@@ -334,9 +334,11 @@ export function ReviewPanel({
                             : `${opponent}’s move`}{' '}
                           · move {selectedMove?.before.split(' ')[5]}
                         </p>
-                        <p className="coach-explanation">
-                          {idea ? idea.description : selected.explanation}
-                        </p>
+                        {finished && (
+                          <p className="coach-explanation">
+                            {idea ? idea.description : selected.explanation}
+                          </p>
+                        )}
                       </>
                     ) : (
                       <div className="coach-waiting">
@@ -354,15 +356,19 @@ export function ReviewPanel({
                               ? `${selectedMove.san} — ${reviewState === 'error' ? 'review paused' : 'analyzing'}`
                               : cursor === 0
                                 ? 'Starting position'
-                                : 'Let’s look at your game'}
+                                : finished
+                                  ? 'Let’s look at your game'
+                                  : 'Ready to play'}
                           </b>
-                          <p>
-                            {selectedMove
-                              ? 'Your move is saved. Its grade and ideas will appear here shortly.'
-                              : cursor === 0
-                                ? 'Step forward to explore the first move.'
-                                : 'Play a move or import a game to discover the ideas behind every decision.'}
-                          </p>
+                          {finished && (
+                            <p>
+                              {selectedMove
+                                ? 'Your move is saved. Its grade and ideas will appear here shortly.'
+                                : cursor === 0
+                                  ? 'Step forward to explore the first move.'
+                                  : 'Play a move or import a game to discover the ideas behind every decision.'}
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}
@@ -382,6 +388,7 @@ export function ReviewPanel({
                 )}
                 {explained && selected && (
                   <div className="coach-detail">
+                    {!finished && idea && <p>{idea.description}</p>}
                     <p>{selected.explanation}</p>
                     <div className="best-move-line">
                       <span>
@@ -420,28 +427,30 @@ export function ReviewPanel({
               </div>
             </>
           )}
-          <div className="review-progress" role="status">
-            {reviewState === 'error' ? (
-              <>
-                <span>Analysis paused · moves are saved</span>
-                <button className="text-button" onClick={onRetry} title={reviewError}>
-                  <RotateCcw size={13} /> Retry
-                </button>
-              </>
-            ) : pending > 0 ? (
-              <>
-                <LoaderCircle size={12} className="spin" />
-                <span>
-                  Analyzing {pending} {pending === 1 ? 'move' : 'moves'}… keep playing
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="status-dot ready" />
-                <span>{moves.length ? 'Analysis up to date' : 'Ready for your first move'}</span>
-              </>
-            )}
-          </div>
+          {(finished || pending > 0 || reviewState === 'error') && (
+            <div className="review-progress" role="status">
+              {reviewState === 'error' ? (
+                <>
+                  <span>Analysis paused · moves are saved</span>
+                  <button className="text-button" onClick={onRetry} title={reviewError}>
+                    <RotateCcw size={13} /> Retry
+                  </button>
+                </>
+              ) : pending > 0 ? (
+                <>
+                  <LoaderCircle size={12} className="spin" />
+                  <span>
+                    Analyzing {pending} {pending === 1 ? 'move' : 'moves'}… keep playing
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="status-dot ready" />
+                  <span>{moves.length ? 'Analysis up to date' : 'Ready for your first move'}</span>
+                </>
+              )}
+            </div>
+          )}
         </>
       )}
       {(hidden || view === 'moves') && (
@@ -508,11 +517,17 @@ export function ReviewPanel({
               <p className="empty-moves">Your moves will appear here.</p>
             )}
           </div>
-          {!hidden && (
-            <div className="review-timeline">
-              <EvaluationChart records={records} cursor={cursor} onSelect={select} />
-            </div>
-          )}
+          {!hidden &&
+            (finished ? (
+              <div className="review-timeline">
+                <EvaluationChart records={records} cursor={cursor} onSelect={select} />
+              </div>
+            ) : (
+              <details className="match-evaluation">
+                <summary>Evaluation graph</summary>
+                <EvaluationChart records={records} cursor={cursor} onSelect={select} />
+              </details>
+            ))}
           <div className="history-controls">
             <button
               className="icon-button"
@@ -572,7 +587,7 @@ export function ReviewPanel({
             <button className="text-button" onClick={() => select(null)} disabled={cursor === null}>
               {cursor === null ? 'Live position' : 'Back to live'}
             </button>
-            <span title="Use left and right arrow keys">← → to navigate</span>
+            {finished && <span title="Use left and right arrow keys">← → to navigate</span>}
           </div>
         </>
       )}

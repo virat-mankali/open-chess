@@ -128,10 +128,27 @@ describe('F01–F03 game and coach flows', () => {
     const pgn = savedGames()[0].pgn;
     cleanup();
     render(<App />);
-    await waitFor(() => expect(screen.getByText('Stockfish 19 ready')).toBeTruthy());
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'e4 white pawn' }).getAttribute('aria-disabled'),
+      ).toBe('false'),
+    );
     expect(screen.getByRole('button', { name: 'e4 white pawn' })).toBeTruthy();
     expect(savedGames()[0].pgn).toBe(pgn);
   });
+});
+it('keeps live coaching compact until an explanation or graph is requested', async () => {
+  await setup();
+  await playFirstMove();
+  expect(document.querySelector('.under-board-note')).toBeNull();
+  expect(document.querySelector('.board-review-caption')).toBeNull();
+  expect(document.querySelector('.coach-portrait')).toBeNull();
+  expect(document.querySelector('.coach-detail')).toBeNull();
+  expect(document.querySelector('.match-evaluation')?.hasAttribute('open')).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
+  expect(document.querySelector('.coach-detail')?.textContent).toContain('Depth');
+  fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
+  expect(document.querySelector('.coach-detail')).toBeNull();
 });
 describe('F04–F06 learning, settings and import', () => {
   it('lets a user solve a puzzle and saves completion', async () => {

@@ -9,4 +9,6 @@
 
 **Cburnett chess pieces**, Colin M. L. Burnett: GPL-2.0-or-later. All 12 unmodified SVG source files, license, attribution, upstream links and SHA-256 checksums are bundled under `apps/web/public/pieces/cburnett/` and served at `/pieces/cburnett/`. These remain available as the Classic piece style.
 
+**Chess sound samples**, Enigmahack: AGPL-3.0-or-later. Three unmodified samples from Lichess's **sfx** set (Move, Capture and Check), revision `eb880c521ccbf5b7dc573f9f84ff061ba1724ccd`. Source, attribution, checksums and license are bundled under `apps/web/public/audio/`, served at `/audio/SOURCE.txt` and `/audio/COPYING.txt`. Source: https://github.com/lichess-org/lila/tree/eb880c521ccbf5b7dc573f9f84ff061ba1724ccd/public/sound/sfx. No samples from the separately licensed standard set are used.
+
 The Sculpted SVG set and linen board texture were implemented for this project from the visual direction in the user-supplied screenshot; the editable assets are in `apps/web/public/pieces/sculpted/` and `apps/web/public/boards/`. Bot artwork, the wordmark, interface copy and training positions were authored for this project. No target app assets or bot identities are bundled.

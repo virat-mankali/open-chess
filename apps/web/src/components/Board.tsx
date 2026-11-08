@@ -78,7 +78,7 @@ export function Board({
   }, [promotion]);
   const [selectionFen, setSelectionFen] = useState(fen);
   const game = new Chess(fen);
-  const currentSelected = selectionFen === fen ? selected : null;
+  const currentSelected = !disabled && selectionFen === fen ? selected : null;
   const targets = currentSelected ? game.moves({ square: currentSelected, verbose: true }) : [];
   const files = orientation === 'w' ? 'abcdefgh' : 'hgfedcba';
   const ranks = orientation === 'w' ? [8, 7, 6, 5, 4, 3, 2, 1] : [1, 2, 3, 4, 5, 6, 7, 8];
@@ -99,7 +99,9 @@ export function Board({
       return;
     }
     setSelectionFen(fen);
-    setSelected(game.get(square)?.color === game.turn() ? square : null);
+    setSelected(
+      currentSelected !== square && game.get(square)?.color === game.turn() ? square : null,
+    );
   };
   function pointerDown(e: ReactPointerEvent<HTMLButtonElement>, square: Square) {
     const piece = game.get(square);
@@ -204,9 +206,10 @@ export function Board({
               <button
                 key={square}
                 data-square={square}
-                className={`square ${light ? 'light' : 'dark'} ${currentSelected === square ? 'selected' : ''} ${recent ? 'last-move' : ''} ${suggested ? 'hinted' : ''} ${hoverSquare === square && target ? 'drop-ready' : ''} ${checkedKing === square ? 'checked' : ''}`}
+                className={`square ${light ? 'light' : 'dark'} ${currentSelected === square ? 'selected' : ''} ${recent ? 'last-move' : ''} ${suggested ? 'hinted' : ''} ${preferences.targets && target ? 'legal-target' : ''} ${preferences.targets && hoverSquare === square && target ? 'drop-ready' : ''} ${!disabled && piece?.color === game.turn() ? 'selectable-piece' : ''} ${checkedKing === square ? 'checked' : ''}`}
                 aria-label={`${square}${piece ? ` ${piece.color === 'w' ? 'white' : 'black'} ${{ p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' }[piece.type]}` : ''}`}
                 aria-disabled={disabled}
+                aria-pressed={currentSelected === square}
                 onClick={(e) => {
                   if (suppressClick.current && e.detail > 0) {
                     suppressClick.current = false;
@@ -226,6 +229,9 @@ export function Board({
                 {preferences.targets && target && (
                   <span className={piece ? 'capture-target' : 'move-target'} />
                 )}
+                <svg className="square-corners" viewBox="0 0 100 100" aria-hidden="true">
+                  <path d="M7 28V10Q7 7 10 7H28M72 7H90Q93 7 93 10V28M93 72V90Q93 93 90 93H72M28 93H10Q7 93 7 90V72" />
+                </svg>
                 {quality && quality.uci.slice(2, 4) === square && (
                   <QualityBadge quality={quality.quality} size="board" className="move-badge" />
                 )}

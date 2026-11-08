@@ -1,17 +1,59 @@
-OpenChess chess sound samples
+OpenChess recorded chess sounds — CC0 1.0 Universal
 
-Author: Enigmahack (https://github.com/Enigmahack)
-License: GNU Affero General Public License, version 3 or later (COPYING.txt).
+Original recording: "chess pieces.wav", simone_ds, 2016-10-31.
+The author describes chess pieces placed on a board with varying hardness.
+Author and explicit CC0 dedication (verified 2026-11-08):
+https://freesound.org/people/simone_ds/sounds/366065/
+License: https://creativecommons.org/publicdomain/zero/1.0/
+Full legal text: COPYING.txt. Copying, modification and commercial reuse allowed.
 
-Unmodified Move.mp3, Capture.mp3 and Check.mp3 from Lichess's sfx sound set,
-renamed to move.mp3, capture.mp3 and check.mp3. No other sound sets are used.
-Source revision: eb880c521ccbf5b7dc573f9f84ff061ba1724ccd
-Source files:
-https://github.com/lichess-org/lila/tree/eb880c521ccbf5b7dc573f9f84ff061ba1724ccd/public/sound/sfx
-Attribution and license declaration:
-https://github.com/lichess-org/lila/blob/eb880c521ccbf5b7dc573f9f84ff061ba1724ccd/COPYING.md
+Source excerpt: EmyChess's Move.ogg, explicitly credited to the above recording
+and exempted from that repository's other asset licenses in its README.
+Pinned revision: 428aae78a7a9c280b8d4e182045306e02d45efd1
+https://github.com/emymin/EmyChess/blob/428aae78a7a9c280b8d4e182045306e02d45efd1/README.md
+https://github.com/emymin/EmyChess/blob/428aae78a7a9c280b8d4e182045306e02d45efd1/Packages/com.emymin.emychess/Runtime/Audio/Move.ogg
+Source SHA-256:
+0065d551d6eaae5f5fa3ddf8b43034cc73735934841faa1fd221ceb8d79ae226 Move.ogg
 
-SHA-256:
-0b4bbf4b0bc0cd937f9661820da4f6e9c5b821913a32502d3b571e6730f7c984 move.mp3
-59b9de82710ea30968312902bf7ac8334a1da620ee364e231ef9454f8648f2d2 capture.mp3
-efaa7ae9a88025b6678de680441d806ce55e1a49f9009305235c5cd63a226093 check.mp3
+OpenChess edits: downmix to mono, trim to 120 ms, fade the last 40 ms and reduce
+level. Capture combines two of these recorded contacts, 18 ms apart, at 75%
+and 85% amplitude. No oscillators, pitch shifting, reverb or tonal cues.
+Checks/review/retry use move.wav; captures/castles/promotions/finish use capture.wav.
+The user's persisted volume is applied at playback, as before.
+
+Reproduce with FFmpeg (tested with 7.1.5):
+ffmpeg -i Move.ogg -af 'pan=mono|c0=0.5*c0+0.5*c1,atrim=duration=0.12,afade=t=out:st=0.08:d=0.04,volume=0.7' -ar 48000 -c:a pcm_s16le move.wav
+ffmpeg -i move.wav -filter_complex '[0:a]asplit=2[first][second];[first]volume=0.75[a];[second]adelay=18,volume=0.85[b];[a][b]amix=inputs=2:normalize=0' -c:a pcm_s16le capture.wav
+
+Bundled SHA-256:
+c11ad9d6505d576ad691d91650b578ca584b9ff82de55196b6bc54942edf31a1 move.wav
+5d8c9cf9c39894a811292af2c089a8d29ae7ceb01ba8a269a1854e3249ee49ff capture.wav
+
+Reference investigation (2026-11-08; reference recordings NOT redistributed):
+Chessreps was reachable over HTTPS. Its analysis page loads sound selection code
+from /_app/immutable/chunks/BCeYnKji.js. It maps normal moves to /sounds/move.wav,
+captures to /sounds/capture.wav, and checks to /sounds/check.wav, on the host
+https://www.chessreps.com. SAN notation selects the cue. Files were downloaded
+and decoded for signal analysis, not inferred from page text or filenames.
+Chromium interaction with the live analysis board (e4, d5, exd5) confirmed two
+move.wav starts and one capture.wav start, with nonzero Web Audio output. HTTPS
+responses were supplied through the environment's CA-verified curl client
+because the isolated Chromium profile did not trust the supplied proxy CA.
+No certificate validation was disabled and no persistent trust change was made.
+Reference SHA-256:
+4a9fcc2614ff4fda71b49d2e336a12b37318ae2228c3d9a757134b1af141f1e5 move.wav
+51912cd350876a0e9d7c00f07458b6d4af186e6495a6b89c3c32d1747ad51af3 capture.wav
+990594243b63469cbe07b13c047fc9e7e589f18840e08dbc17ab06f07e88f780 check.wav
+
+Chessreps gives no audio-specific author or reuse license in that module or the
+WAV metadata. Its terms, sections 7.1–7.3, reserve rights and limit service use;
+no permission to redistribute these recordings was found:
+https://www.chessreps.com/terms-and-conditions
+Their original creator could not be established. Public file access is not a
+reuse license. OpenChess therefore uses the independently licensed recording
+above, not Chessreps or Lichess audio. This is an alternative, not an exact match.
+
+Reference signal measurements: 200 ms move and 500 ms capture files, with 90% of
+mono signal energy within about 3.4 ms and 25.5 ms respectively. Capture's largest
+impacts are about 17 ms apart. The alternative follows that short contact pattern.
+These measurements are not a claim of listening or subjective equivalence.

@@ -5,6 +5,7 @@ import { Chess, BOTS, type Evaluation } from '@open-chess/chess-core';
 import App from './App';
 import { Board } from './components/Board';
 import { defaults, savedGames, preferences, progress, write } from './storage/local';
+import * as chessAudio from './audio/chessAudio';
 
 vi.mock('./engine/stockfish', () => ({
   StockfishEngine: class {
@@ -123,9 +124,12 @@ describe('F01–F03 game and coach flows', () => {
     expect(screen.getByRole('button', { name: 'e4 white pawn' })).toBeTruthy();
   });
   it('resumes an interrupted game from PGN and existing analysis', async () => {
+    write('preferences', { ...defaults, sound: true });
+    const play = vi.spyOn(chessAudio, 'playChessSound');
     await setup();
     await playFirstMove();
     const pgn = savedGames()[0].pgn;
+    play.mockClear();
     cleanup();
     render(<App />);
     await waitFor(() =>
@@ -135,6 +139,7 @@ describe('F01–F03 game and coach flows', () => {
     );
     expect(screen.getByRole('button', { name: 'e4 white pawn' })).toBeTruthy();
     expect(savedGames()[0].pgn).toBe(pgn);
+    expect(play).not.toHaveBeenCalled();
   });
 });
 it('keeps live coaching compact until an explanation or graph is requested', async () => {
@@ -194,8 +199,11 @@ describe('F04–F06 learning, settings and import', () => {
         ?.getAttribute('src'),
     ).toBe('/pieces/cburnett/wK.svg');
   });
-  it('imports a legal PGN and computes one review per move', async () => {
+  it('imports a legal PGN silently even with sound enabled', async () => {
+    write('preferences', { ...defaults, sound: true });
+    const play = vi.spyOn(chessAudio, 'playChessSound');
     await setup();
+    expect(play).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'My games' }));
     fireEvent.click(screen.getByRole('button', { name: 'Import PGN' }));
     fireEvent.change(screen.getByLabelText('Game notation'), {
@@ -204,6 +212,33 @@ describe('F04–F06 learning, settings and import', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Analyze game' }));
     await waitFor(() => expect(savedGames()[0]?.records).toHaveLength(4));
     expect(screen.getByRole('heading', { name: 'Game Review' })).toBeTruthy();
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it('persists sound volume and mute, stopping audio when volume reaches zero', async () => {
+    write('preferences', { ...defaults, sound: true, soundVolume: 65 });
+    const silence = vi.spyOn(chessAudio, 'silenceChessAudio');
+    const play = vi.spyOn(chessAudio, 'playChessSound');
+    await setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Board settings' }));
+    fireEvent.change(screen.getByLabelText(/Volume/), { target: { value: '0' } });
+    expect(silence).toHaveBeenCalled();
+    expect(preferences().soundVolume).toBe(0);
+    fireEvent.change(screen.getByLabelText(/Volume/), { target: { value: '35' } });
+    cleanup();
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Board settings' }));
+    expect((screen.getByLabelText(/Volume/) as HTMLInputElement).value).toBe('35');
+    expect(play).not.toHaveBeenCalled();
+    silence.mockClear();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Move sounds/ }));
+    expect(silence).toHaveBeenCalledOnce();
+    expect(preferences()).toMatchObject({ sound: false, soundVolume: 35 });
+    cleanup();
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Board settings' }));
+    expect((screen.getByRole('checkbox', { name: /Move sounds/ }) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText(/Volume/) as HTMLInputElement).value).toBe('35');
   });
   it('shows a real fork plan, previews the engine choice, and keeps PGN history unchanged', async () => {
     await setup();

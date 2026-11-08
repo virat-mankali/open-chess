@@ -1085,7 +1085,7 @@ export default function App() {
                   {
                     key: 'sound',
                     title: 'Move sounds',
-                    description: 'Distinct cues for moves, captures, checks, and game endings.',
+                    description: 'Recorded board taps for moves and captures.',
                   },
                   {
                     key: 'targets',

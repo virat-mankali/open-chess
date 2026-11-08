@@ -11,6 +11,8 @@ describe('chess sound events', () => {
     expect(soundForMove(game.move('exd5'))).toBe('capture');
     const ep = new Chess('4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 2');
     expect(soundForMove(ep.move('exd6'))).toBe('capture');
+    const checkingCapture = new Chess('4k3/3p4/2B5/8/8/8/8/4K3 w - - 0 1');
+    expect(soundForMove(checkingCapture.move('Bxd7+'))).toBe('capture');
     const castle = new Chess('4k3/8/8/8/8/8/8/4K2R w K - 0 1');
     expect(soundForMove(castle.move('O-O'))).toBe('castle');
   });
@@ -81,7 +83,7 @@ it('unlocks one context, caches samples, respects volume and mute, and stops act
   audio.unlockChessAudio();
   audio.unlockChessAudio();
   expect(constructor).toHaveBeenCalledTimes(1);
-  expect(fetchSample).toHaveBeenCalledTimes(3);
+  expect(fetchSample).toHaveBeenCalledTimes(2);
   audio.playChessSound('move', false, 65);
   audio.playChessSound('check', true, 0);
   audio.playChessSound('move', true, NaN);
@@ -94,9 +96,10 @@ it('unlocks one context, caches samples, respects volume and mute, and stops act
   expect(sources[0].disconnect).toHaveBeenCalledOnce();
   expect(gains[0].disconnect).toHaveBeenCalledOnce();
   audio.playChessSound('castle', true, 35);
-  await vi.waitFor(() => expect(sources).toHaveLength(3));
-  expect(sources[2].start).toHaveBeenCalledWith(0.1);
-  expect(fetchSample).toHaveBeenCalledTimes(3);
+  await vi.waitFor(() => expect(sources).toHaveLength(2));
+  expect(sources[1].start).toHaveBeenCalledWith(0);
+  expect(sources[1].playbackRate.value).toBe(1);
+  expect(fetchSample).toHaveBeenCalledTimes(2);
 });
 
 it('does not play a pending decoded sample after muting', async () => {
@@ -108,8 +111,17 @@ it('does not play a pending decoded sample after muting', async () => {
   audio.unlockChessAudio();
   audio.playChessSound('move', true, 65);
   audio.silenceChessAudio();
+  // Re-enabling before decode finishes must not resurrect the muted cue.
+  audio.unlockChessAudio();
   resolve({ duration: 0.22 });
   // Flush fetch, decode and playback promise continuations.
+  await new Promise((done) => setTimeout(done, 0));
+  expect(sources).toHaveLength(0);
+});
+
+it('keeps preloading silent until a move is requested', async () => {
+  const { audio, sources } = await setupAudio();
+  audio.unlockChessAudio();
   await new Promise((done) => setTimeout(done, 0));
   expect(sources).toHaveLength(0);
 });

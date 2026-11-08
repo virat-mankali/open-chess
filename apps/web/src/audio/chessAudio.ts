@@ -5,15 +5,14 @@ export type ChessSound =
 export function soundForMove(move: Move): ChessSound {
   if (move.san.endsWith('#')) return 'finish';
   if (move.promotion) return 'promotion';
-  if (move.san.includes('+')) return 'check';
   if (move.isKingsideCastle() || move.isQueensideCastle()) return 'castle';
-  return move.captured ? 'capture' : 'move';
+  if (move.captured) return 'capture';
+  return move.san.includes('+') ? 'check' : 'move';
 }
 
 const samples = {
-  move: '/audio/move.mp3',
-  capture: '/audio/capture.mp3',
-  check: '/audio/check.mp3',
+  move: '/audio/move.wav',
+  capture: '/audio/capture.wav',
 };
 type Sample = keyof typeof samples;
 let context: AudioContext | null = null;
@@ -73,12 +72,12 @@ export function playChessSound(kind: ChessSound, enabled: boolean, volume: numbe
     return;
   const cue = ++generation;
   const requestedAt = performance.now();
+  // Every cue uses recorded board contacts. Checks use the ordinary placement;
+  // captures, castling and game endings use the short paired contact recording.
   const name: Sample =
-    kind === 'capture' || kind === 'promotion'
+    kind === 'capture' || kind === 'promotion' || kind === 'castle' || kind === 'finish'
       ? 'capture'
-      : kind === 'check' || kind === 'finish'
-        ? 'check'
-        : 'move';
+      : 'move';
   void loadSample(audio, name).then((buffer) => {
     // A slow download must never play an old move or bypass a later mute action.
     if (
@@ -90,11 +89,10 @@ export function playChessSound(kind: ChessSound, enabled: boolean, volume: numbe
       return;
     const level = Math.min(volume, 100) / 100;
     const strength = kind === 'review' ? 0.32 : kind === 'retry' ? 0.4 : 0.8;
-    function tap(delay: number, rate = 1) {
+    function tap() {
       const source = audio!.createBufferSource();
       const gain = audio!.createGain();
       source.buffer = buffer;
-      source.playbackRate.value = rate;
       gain.gain.value = level * strength;
       source.connect(gain).connect(audio!.destination);
       active.set(source, gain);
@@ -103,11 +101,10 @@ export function playChessSound(kind: ChessSound, enabled: boolean, volume: numbe
         source.disconnect();
         gain.disconnect();
       };
-      source.start(audio!.currentTime + delay);
+      source.start(audio!.currentTime);
     }
     try {
-      tap(0, kind === 'retry' ? 0.85 : 1);
-      if (kind === 'castle') tap(0.1, 0.92);
+      tap();
     } catch {
       /* A device change or browser audio policy must never interrupt a move. */
     }

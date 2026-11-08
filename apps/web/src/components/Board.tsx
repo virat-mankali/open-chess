@@ -10,7 +10,7 @@ import {
 } from '@open-chess/chess-core';
 import { Piece } from './Artwork';
 import { QualityBadge } from './QualityBadge';
-import { usePieceMotion } from './usePieceMotion';
+import { usePieceMotion, type PieceDrop } from './usePieceMotion';
 import { BoardAnnotations } from './BoardAnnotations';
 import type { Preferences } from '../storage/local';
 
@@ -21,6 +21,10 @@ type Drag = {
   pointerId: number;
   x: number;
   y: number;
+  startX: number;
+  startY: number;
+  offsetX: number;
+  offsetY: number;
   size: number;
   active: boolean;
   fen: string;
@@ -51,9 +55,17 @@ export function Board({
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
+  const effectsRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<Drag | null>(null);
-  const droppedMove = useRef<string | null>(null);
-  usePieceMotion(boardRef, fen, orientation, droppedMove);
+  const droppedMove = useRef<PieceDrop | null>(null);
+  const { returnPiece, cancelMotion } = usePieceMotion(
+    boardRef,
+    effectsRef,
+    fen,
+    orientation,
+    droppedMove,
+    preferences.pieces,
+  );
   const [hoverSquare, setHoverSquare] = useState<Square | null>(null);
   const suppressClick = useRef(false);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -64,11 +76,19 @@ export function Board({
   }
   useEffect(() => {
     cancelDrag();
+    droppedMove.current = null;
+    setPromotion(null);
   }, [fen, orientation, disabled]);
   useEffect(() => {
     const cancel = () => cancelDrag();
     window.addEventListener('blur', cancel);
-    return () => window.removeEventListener('blur', cancel);
+    window.addEventListener('resize', cancel);
+    window.addEventListener('scroll', cancel, true);
+    return () => {
+      window.removeEventListener('blur', cancel);
+      window.removeEventListener('resize', cancel);
+      window.removeEventListener('scroll', cancel, true);
+    };
   }, []);
   const [selected, setSelected] = useState<Square | null>(null);
   const [promotion, setPromotion] = useState<{ from: Square; to: Square } | null>(null);
@@ -82,14 +102,17 @@ export function Board({
   const targets = currentSelected ? game.moves({ square: currentSelected, verbose: true }) : [];
   const files = orientation === 'w' ? 'abcdefgh' : 'hgfedcba';
   const ranks = orientation === 'w' ? [8, 7, 6, 5, 4, 3, 2, 1] : [1, 2, 3, 4, 5, 6, 7, 8];
-  const submit = (from: Square, to: Square) => {
+  const submit = (from: Square, to: Square, drop?: PieceDrop) => {
     const possible = game.moves({ square: from, verbose: true }).filter((m) => m.to === to);
     if (!possible.length) return;
     setSelected(null);
     if (possible.some((m) => m.promotion)) {
+      // Promotion waits for a choice; its eventual move animates from the pawn square.
+      droppedMove.current = null;
       setPromotion({ from, to });
       return;
     }
+    droppedMove.current = drop ?? null;
     onMove(from, to);
   };
   const select = (square: Square) => {
@@ -107,6 +130,8 @@ export function Board({
     const piece = game.get(square);
     if (
       disabled ||
+      dragRef.current ||
+      promotion ||
       e.isPrimary === false ||
       e.button !== 0 ||
       !piece ||
@@ -114,14 +139,22 @@ export function Board({
     )
       return;
     suppressClick.current = false;
+    cancelMotion();
     const size = boardRef.current!.getBoundingClientRect().width / 8;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetX = e.pointerType === 'touch' ? size / 2 : e.clientX - rect.left;
+    const offsetY = e.pointerType === 'touch' ? size * 1.15 : e.clientY - rect.top;
     dragRef.current = {
       from: square,
       type: piece.type,
       color: piece.color,
       pointerId: e.pointerId,
-      x: e.clientX,
-      y: e.clientY,
+      x: e.clientX - offsetX,
+      y: e.clientY - offsetY,
+      startX: e.clientX,
+      startY: e.clientY,
+      offsetX,
+      offsetY,
       size,
       active: false,
       fen,
@@ -132,14 +165,19 @@ export function Board({
     const candidate = dragRef.current;
     if (!candidate || candidate.pointerId !== e.pointerId || disabled || candidate.fen !== fen)
       return;
-    if (!candidate.active && Math.hypot(e.clientX - candidate.x, e.clientY - candidate.y) < 4)
+    if (
+      !candidate.active &&
+      Math.hypot(e.clientX - candidate.startX, e.clientY - candidate.startY) < 4
+    )
       return;
     e.preventDefault();
+    candidate.x = e.clientX - candidate.offsetX;
+    candidate.y = e.clientY - candidate.offsetY;
     if (!candidate.active) {
       candidate.active = true;
       setSelectionFen(fen);
       setSelected(candidate.from);
-      setDrag({ ...candidate, x: e.clientX, y: e.clientY });
+      setDrag({ ...candidate });
     }
     const rect = boardRef.current!.getBoundingClientRect();
     const col = Math.floor(((e.clientX - rect.left) / rect.width) * 8);
@@ -149,7 +187,7 @@ export function Board({
     setHoverSquare((old) => (old === hover ? old : hover));
     // Moving a single fixed overlay avoids rerendering 64 squares at pointer speed.
     if (ghostRef.current)
-      ghostRef.current.style.transform = `translate3d(${e.clientX - candidate.size / 2}px, ${e.clientY - candidate.size / 2}px, 0)`;
+      ghostRef.current.style.transform = `translate3d(${candidate.x}px, ${candidate.y}px, 0)`;
   }
   function pointerUp(e: ReactPointerEvent<HTMLDivElement>) {
     const candidate = dragRef.current;
@@ -159,16 +197,31 @@ export function Board({
     e.preventDefault();
     suppressClick.current = true;
     if (disabled || candidate.fen !== fen) return;
+    const x = e.clientX - candidate.offsetX;
+    const y = e.clientY - candidate.offsetY;
     const rect = boardRef.current!.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const col = Math.floor(((e.clientX - rect.left) / rect.width) * 8);
     const row = Math.floor(((e.clientY - rect.top) / rect.height) * 8);
-    if (col < 0 || col > 7 || row < 0 || row > 7) return;
-    const to = (files[col] + ranks[row]) as Square;
-    if (to !== candidate.from) {
-      droppedMove.current = candidate.from + to;
-      submit(candidate.from, to);
+    const to =
+      col >= 0 && col < 8 && row >= 0 && row < 8 ? ((files[col] + ranks[row]) as Square) : null;
+    if (
+      to &&
+      game.moves({ square: candidate.from, verbose: true }).some((move) => move.to === to)
+    ) {
+      submit(candidate.from, to, { from: candidate.from, to, x, y });
+    } else {
+      returnPiece(candidate.from, x, y);
     }
+  }
+  function abortDrag(pointerId?: number) {
+    const candidate = dragRef.current;
+    if (!candidate || (pointerId !== undefined && candidate.pointerId !== pointerId)) return;
+    if (candidate.active) {
+      suppressClick.current = true;
+      returnPiece(candidate.from, candidate.x, candidate.y);
+    }
+    cancelDrag();
   }
   const checkedKing = game.isCheck()
     ? game
@@ -183,11 +236,11 @@ export function Board({
         ref={boardRef}
         onPointerMove={pointerMove}
         onPointerUp={pointerUp}
-        onPointerCancel={cancelDrag}
-        onLostPointerCapture={cancelDrag}
+        onPointerCancel={(e) => abortDrag(e.pointerId)}
+        onLostPointerCapture={(e) => abortDrag(e.pointerId)}
         onKeyDown={(e) => {
           if (e.key === 'Escape') {
-            cancelDrag();
+            abortDrag();
             setSelected(null);
           }
         }}
@@ -206,7 +259,7 @@ export function Board({
               <button
                 key={square}
                 data-square={square}
-                className={`square ${light ? 'light' : 'dark'} ${currentSelected === square ? 'selected' : ''} ${recent ? 'last-move' : ''} ${suggested ? 'hinted' : ''} ${preferences.targets && target ? 'legal-target' : ''} ${preferences.targets && hoverSquare === square && target ? 'drop-ready' : ''} ${!disabled && piece?.color === game.turn() ? 'selectable-piece' : ''} ${checkedKing === square ? 'checked' : ''}`}
+                className={`square ${light ? 'light' : 'dark'} ${currentSelected === square ? 'selected' : ''} ${recent ? 'last-move' : ''} ${suggested ? 'hinted' : ''} ${preferences.targets && target ? 'legal-target' : ''} ${hoverSquare === square && target ? `drop-ready ${piece || targets.some((m) => m.to === square && m.isEnPassant()) ? 'capture-ready' : ''}` : ''} ${!disabled && piece?.color === game.turn() ? 'selectable-piece' : ''} ${checkedKing === square ? 'checked' : ''}`}
                 aria-label={`${square}${piece ? ` ${piece.color === 'w' ? 'white' : 'black'} ${{ p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' }[piece.type]}` : ''}`}
                 aria-disabled={disabled}
                 aria-pressed={currentSelected === square}
@@ -239,21 +292,24 @@ export function Board({
             );
           }),
         )}
+        <div ref={effectsRef} className="board-effects" aria-hidden="true" />
       </div>
       <BoardAnnotations arrows={arrows} targets={ideaTargets} orientation={orientation} />
       {drag &&
         createPortal(
           <div
-            className="dragged-piece"
+            className={`dragged-piece theme-${preferences.theme}`}
             ref={ghostRef}
             aria-hidden="true"
             style={{
               width: drag.size,
               height: drag.size,
-              transform: `translate3d(${drag.x - drag.size / 2}px, ${drag.y - drag.size / 2}px, 0)`,
+              transform: `translate3d(${drag.x}px, ${drag.y}px, 0)`,
             }}
           >
-            <Piece type={drag.type} color={drag.color} set={preferences.pieces} />
+            <div className="dragged-piece-art">
+              <Piece type={drag.type} color={drag.color} set={preferences.pieces} />
+            </div>
           </div>,
           document.body,
         )}
